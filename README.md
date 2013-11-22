@@ -14,9 +14,13 @@ I also provide a patch file `linux-0.11-deb64-1.0.patch` to modify the original 
 
 To apply the patch, assume the source codes are decompressed to the directory `linux-0.11`, then
 ```
-cd linux-0.11/
-patch -p1 < ../linux-0.11-deb64-1.0.patch
+$ cd linux-0.11/
+$ patch -p1 < ../linux-0.11-deb64-1.0.patch
 ``` 
+
+##NOTE:
+
+1. The root device is "FLOPPY". You can change it in `./Makefile` by modifying the `ROOT_DEV`.
 
 [1]: http://bochs.sourceforge.net
 [2]: http://www.oldlinux.org/Linux.old/Linux-0.11/sources/system/
