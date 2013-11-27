@@ -2,16 +2,16 @@
 # if you want the ram-disk device, define this to be the
 # size in blocks.
 #
-RAMDISK = #-DRAMDISK=512
+RAMDISK = -DRAMDISK=512
 
 AS86	=as86 -0 -a
 LD86	=ld86 -0
 
 AS	=as --32
 LD	=ld -m elf_i386 -Ttext 0 -e startup_32
-LDFLAGS	=-s -x -M
+LDFLAGS	= -x -M
 CC	=gcc $(RAMDISK)
-CFLAGS	=-m32 -Wall -O -fstrength-reduce -fomit-frame-pointer -mtune=i386 
+CFLAGS	=-m32 -Wall -O -g -fstrength-reduce -fomit-frame-pointer -mtune=i386 
  
 CPP	=cpp -nostdinc -Iinclude
 
@@ -43,7 +43,8 @@ Image: boot/bootsect boot/setup tools/system tools/build
 	sync
 
 disk: Image
-	dd bs=8192 if=Image of=/dev/PS0
+	dd if=Image of=bootimage-fda.img
+	dd bs=1024 if=/dev/zero of=bootimage-fda.img seek=256 count=1184
 
 tools/build: tools/build.c
 	$(CC) $(CFLAGS) \
@@ -59,6 +60,9 @@ tools/system:	boot/head.o init/main.o \
 	$(MATH) \
 	$(LIBS) \
 	-o tools/system > System.map
+	objcopy --only-keep-debug tools/system tools/system.dbg
+	objcopy --add-gnu-debuglink=tools/system.dbg tools/system
+	objcopy -g tools/system
 
 kernel/math/math.a:
 	(cd kernel/math; make)
@@ -120,4 +124,4 @@ init/main.o : init/main.c include/unistd.h include/sys/stat.h \
   include/utime.h include/time.h include/linux/tty.h include/termios.h \
   include/linux/sched.h include/linux/head.h include/linux/fs.h \
   include/linux/mm.h include/signal.h include/asm/system.h include/asm/io.h \
-  include/stddef.h include/stdarg.h include/fcntl.h 
+  include/stddef.h include/stdarg.h include/fcntl.h include/check_data32.h
