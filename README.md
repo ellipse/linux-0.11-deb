@@ -9,7 +9,7 @@ The version of tools on my machine are listed below:
 * GNU assembler (GNU Binutils for Debian) 2.23.90.20131116
 * GNU ld (GNU Binutils for Debian) 2.23.90.20131116
 
-I also provide a patch file `linux-0.11-deb64-1.0.patch` to modify the original version
+I also provide a patch file `linux-0.11-deb64.patch` to modify the original version
 (you can download the original kernel source code [here][2]).
 
 To apply the patch, assume the source codes are decompressed to the directory `linux-0.11`, then
