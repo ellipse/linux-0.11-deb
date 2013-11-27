@@ -21,6 +21,7 @@ $ patch -p1 < ../linux-0.11-deb64-1.0.patch
 ## NOTE:
 
 1. The root device is "FLOPPY". You can change it in `./Makefile` by modifying the `ROOT_DEV`.
+2. You can use `make disk` to create a 1.44MB bootable image for bochs.
 
 [1]: http://bochs.sourceforge.net
 [2]: http://www.oldlinux.org/Linux.old/Linux-0.11/sources/system/
