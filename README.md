@@ -15,7 +15,7 @@ I also provide a patch file `linux-0.11-deb64.patch` to modify the original vers
 To apply the patch, assume the source codes are decompressed to the directory `linux-0.11`, then
 ```
 $ cd linux-0.11/
-$ patch -p1 < ../linux-0.11-deb64-1.0.patch
+$ patch -p1 < ../linux-0.11-deb64.patch
 ``` 
 
 ## NOTE:
