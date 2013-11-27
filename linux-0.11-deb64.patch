@@ -1,0 +1,2078 @@
+diff -uNr linux-0.11/boot/bootsect.s linux-0.11-deb/boot/bootsect.s
+--- linux-0.11/boot/bootsect.s	2013-11-22 23:20:48.615288918 +0800
++++ linux-0.11-deb/boot/bootsect.s	2013-11-27 22:47:48.282088482 +0800
+@@ -225,11 +225,11 @@
+ 	pop ax
+ 	jmp read_track
+ 
+-/*
+- * This procedure turns off the floppy drive motor, so
+- * that we enter the kernel in a known state, and
+- * don't have to worry about it later.
+- */
++
++! This procedure turns off the floppy drive motor, so
++! that we enter the kernel in a known state, and
++! don't have to worry about it later.
++
+ kill_motor:
+ 	push dx
+ 	mov dx,#0x3f2
+diff -uNr linux-0.11/boot/head.s linux-0.11-deb/boot/head.s
+--- linux-0.11/boot/head.s	2013-11-22 23:20:48.619288907 +0800
++++ linux-0.11-deb/boot/head.s	2013-11-27 22:47:48.306088470 +0800
+@@ -12,15 +12,15 @@
+  * the page directory.
+  */
+ .text
+-.globl _idt,_gdt,_pg_dir,_tmp_floppy_area
+-_pg_dir:
++.globl idt, gdt, pg_dir, tmp_floppy_area, startup_32
++pg_dir:
+ startup_32:
+ 	movl $0x10,%eax
+ 	mov %ax,%ds
+ 	mov %ax,%es
+ 	mov %ax,%fs
+ 	mov %ax,%gs
+-	lss _stack_start,%esp
++	lss stack_start,%esp
+ 	call setup_idt
+ 	call setup_gdt
+ 	movl $0x10,%eax		# reload all the segment registers
+@@ -28,7 +28,7 @@
+ 	mov %ax,%es		# reloaded in 'setup_gdt'
+ 	mov %ax,%fs
+ 	mov %ax,%gs
+-	lss _stack_start,%esp
++	lss stack_start,%esp
+ 	xorl %eax,%eax
+ 1:	incl %eax		# check that A20 really IS enabled
+ 	movl %eax,0x000000	# loop forever if it isn't
+@@ -60,7 +60,7 @@
+ 	xorl $6,%eax		/* reset MP, set EM */
+ 	movl %eax,%cr0
+ 	ret
+-.align 2
++.align 4
+ 1:	.byte 0xDB,0xE4		/* fsetpm for 287, ignored by 387 */
+ 	ret
+ 
+@@ -81,7 +81,7 @@
+ 	movw %dx,%ax		/* selector = 0x0008 = cs */
+ 	movw $0x8E00,%dx	/* interrupt gate - dpl=0, present */
+ 
+-	lea _idt,%edi
++	lea idt,%edi
+ 	mov $256,%ecx
+ rp_sidt:
+ 	movl %eax,(%edi)
+@@ -129,7 +129,7 @@
+  * reach to a buffer-block. It needs to be aligned, so that it isn't
+  * on a 64kB border.
+  */
+-_tmp_floppy_area:
++tmp_floppy_area:
+ 	.fill 1024,1,0
+ 
+ after_page_tables:
+@@ -137,7 +137,7 @@
+ 	pushl $0
+ 	pushl $0
+ 	pushl $L6		# return address for main, if it decides to.
+-	pushl $_main
++	pushl $main
+ 	jmp setup_paging
+ L6:
+ 	jmp L6			# main should never return here, but
+@@ -146,7 +146,7 @@
+ /* This is the default interrupt "handler" :-) */
+ int_msg:
+ 	.asciz "Unknown interrupt\n\r"
+-.align 2
++.align 4
+ ignore_int:
+ 	pushl %eax
+ 	pushl %ecx
+@@ -159,7 +159,7 @@
+ 	mov %ax,%es
+ 	mov %ax,%fs
+ 	pushl $int_msg
+-	call _printk
++	call printk
+ 	popl %eax
+ 	pop %fs
+ 	pop %es
+@@ -194,16 +194,16 @@
+  * some kind of marker at them (search for "16Mb"), but I
+  * won't guarantee that's all :-( )
+  */
+-.align 2
++.align 4
+ setup_paging:
+ 	movl $1024*5,%ecx		/* 5 pages - pg_dir+4 page tables */
+ 	xorl %eax,%eax
+ 	xorl %edi,%edi			/* pg_dir is at 0x000 */
+ 	cld;rep;stosl
+-	movl $pg0+7,_pg_dir		/* set present bit/user r/w */
+-	movl $pg1+7,_pg_dir+4		/*  --------- " " --------- */
+-	movl $pg2+7,_pg_dir+8		/*  --------- " " --------- */
+-	movl $pg3+7,_pg_dir+12		/*  --------- " " --------- */
++	movl $pg0+7,pg_dir		/* set present bit/user r/w */
++	movl $pg1+7,pg_dir+4		/*  --------- " " --------- */
++	movl $pg2+7,pg_dir+8		/*  --------- " " --------- */
++	movl $pg3+7,pg_dir+12		/*  --------- " " --------- */
+ 	movl $pg3+4092,%edi
+ 	movl $0xfff007,%eax		/*  16Mb - 4096 + 7 (r/w user,p) */
+ 	std
+@@ -217,21 +217,21 @@
+ 	movl %eax,%cr0		/* set paging (PG) bit */
+ 	ret			/* this also flushes prefetch-queue */
+ 
+-.align 2
++.align 4
+ .word 0
+ idt_descr:
+ 	.word 256*8-1		# idt contains 256 entries
+-	.long _idt
+-.align 2
++	.long idt
++.align 4
+ .word 0
+ gdt_descr:
+ 	.word 256*8-1		# so does gdt (not that that's any
+-	.long _gdt		# magic number, but it works for me :^)
++	.long gdt		# magic number, but it works for me :^)
+ 
+-	.align 3
+-_idt:	.fill 256,8,0		# idt is uninitialized
++	.align 8
++idt:	.fill 256,8,0		# idt is uninitialized
+ 
+-_gdt:	.quad 0x0000000000000000	/* NULL descriptor */
++gdt:	.quad 0x0000000000000000	/* NULL descriptor */
+ 	.quad 0x00c09a0000000fff	/* 16Mb */
+ 	.quad 0x00c0920000000fff	/* 16Mb */
+ 	.quad 0x0000000000000000	/* TEMPORARY - don't use */
+diff -uNr linux-0.11/fs/bitmap.c linux-0.11-deb/fs/bitmap.c
+--- linux-0.11/fs/bitmap.c	2013-11-22 23:20:48.619288907 +0800
++++ linux-0.11-deb/fs/bitmap.c	2013-11-27 22:47:45.050090632 +0800
+@@ -14,16 +14,16 @@
+ __asm__("cld\n\t" \
+ 	"rep\n\t" \
+ 	"stosl" \
+-	::"a" (0),"c" (BLOCK_SIZE/4),"D" ((long) (addr)):"cx","di")
++	::"a" (0),"c" (BLOCK_SIZE/4),"D" ((long) (addr)))
+ 
+ #define set_bit(nr,addr) ({\
+-register int res __asm__("ax"); \
++register int res; \
+ __asm__ __volatile__("btsl %2,%3\n\tsetb %%al": \
+ "=a" (res):"0" (0),"r" (nr),"m" (*(addr))); \
+ res;})
+ 
+ #define clear_bit(nr,addr) ({\
+-register int res __asm__("ax"); \
++register int res; \
+ __asm__ __volatile__("btrl %2,%3\n\tsetnb %%al": \
+ "=a" (res):"0" (0),"r" (nr),"m" (*(addr))); \
+ res;})
+@@ -41,7 +41,7 @@
+ 	"cmpl $8192,%%ecx\n\t" \
+ 	"jl 1b\n" \
+ 	"3:" \
+-	:"=c" (__res):"c" (0),"S" (addr):"ax","dx","si"); \
++	:"=c" (__res):"c" (0),"S" (addr):"ax","dx"); \
+ __res;})
+ 
+ void free_block(int dev, int block)
+diff -uNr linux-0.11/fs/buffer.c linux-0.11-deb/fs/buffer.c
+--- linux-0.11/fs/buffer.c	2013-11-22 23:20:48.619288907 +0800
++++ linux-0.11-deb/fs/buffer.c	2013-11-27 22:47:44.934090710 +0800
+@@ -284,8 +284,7 @@
+ __asm__("cld\n\t" \
+ 	"rep\n\t" \
+ 	"movsl\n\t" \
+-	::"c" (BLOCK_SIZE/4),"S" (from),"D" (to) \
+-	:"cx","di","si")
++	::"c" (BLOCK_SIZE/4),"S" (from),"D" (to))
+ 
+ /*
+  * bread_page reads four buffers into memory at the desired address. It's
+diff -uNr linux-0.11/fs/exec.c linux-0.11-deb/fs/exec.c
+--- linux-0.11/fs/exec.c	2013-11-22 23:20:48.619288907 +0800
++++ linux-0.11-deb/fs/exec.c	2013-11-27 22:47:45.022090639 +0800
+@@ -135,10 +135,11 @@
+ 				offset = p % PAGE_SIZE;
+ 				if (from_kmem==2)
+ 					set_fs(old_fs);
+-				if (!(pag = (char *) page[p/PAGE_SIZE]) &&
+-				    !(pag = (char *) page[p/PAGE_SIZE] =
+-				      (unsigned long *) get_free_page())) 
+-					return 0;
++				if (!(pag = (char *) page[p/PAGE_SIZE])) {
++					page[p/PAGE_SIZE] = (unsigned long *) get_free_page();
++					if (!(pag = (char *)page[p/PAGE_SIZE]))
++						return 0;
++				}
+ 				if (from_kmem==2)
+ 					set_fs(new_fs);
+ 
+diff -uNr linux-0.11/fs/Makefile linux-0.11-deb/fs/Makefile
+--- linux-0.11/fs/Makefile	2013-11-22 23:20:48.619288907 +0800
++++ linux-0.11-deb/fs/Makefile	2013-11-27 22:47:44.978090678 +0800
+@@ -1,9 +1,9 @@
+-AR	=gar
+-AS	=gas
++AR	=ar
++AS	=as --32
+ CC	=gcc
+-LD	=gld
+-CFLAGS	=-Wall -O -fstrength-reduce -fcombine-regs -fomit-frame-pointer \
+-	-mstring-insns -nostdinc -I../include
++LD	=ld -m elf_i386
++CFLAGS	=-m32 -Wall -O -g -fstrength-reduce  -fomit-frame-pointer \
++	 -nostdinc -I../include -mtune=i386
+ CPP	=gcc -E -nostdinc -I../include
+ 
+ .c.s:
+diff -uNr linux-0.11/fs/namei.c linux-0.11-deb/fs/namei.c
+--- linux-0.11/fs/namei.c	2013-11-22 23:20:48.619288907 +0800
++++ linux-0.11-deb/fs/namei.c	2013-11-27 22:47:44.966090672 +0800
+@@ -62,7 +62,7 @@
+  */
+ static int match(int len,const char * name,struct dir_entry * de)
+ {
+-	register int same __asm__("ax");
++	register int same;
+ 
+ 	if (!de || !de->inode || len > NAME_LEN)
+ 		return 0;
+@@ -72,8 +72,7 @@
+ 		"fs ; repe ; cmpsb\n\t"
+ 		"setz %%al"
+ 		:"=a" (same)
+-		:"0" (0),"S" ((long) name),"D" ((long) de->name),"c" (len)
+-		:"cx","di","si");
++		:"0" (0),"S" ((long) name),"D" ((long) de->name),"c" (len));
+ 	return same;
+ }
+ 
+diff -uNr linux-0.11/fs/.s linux-0.11-deb/fs/.s
+--- linux-0.11/fs/.s	1970-01-01 07:00:00.000000000 +0700
++++ linux-0.11-deb/fs/.s	2013-11-27 22:47:44.954090701 +0800
+@@ -0,0 +1,127 @@
++
++truncate.o:     file format elf32-i386
++
++
++Disassembly of section .text:
++
++00000000 <free_ind>:
++   0:	55                   	push   %ebp
++   1:	57                   	push   %edi
++   2:	56                   	push   %esi
++   3:	53                   	push   %ebx
++   4:	83 ec 1c             	sub    $0x1c,%esp
++   7:	89 d5                	mov    %edx,%ebp
++   9:	85 d2                	test   %edx,%edx
++   b:	74 54                	je     61 <free_ind+0x61>
++   d:	89 c7                	mov    %eax,%edi
++   f:	89 54 24 04          	mov    %edx,0x4(%esp)
++  13:	89 04 24             	mov    %eax,(%esp)
++  16:	e8 fc ff ff ff       	call   17 <free_ind+0x17>
++  1b:	89 44 24 0c          	mov    %eax,0xc(%esp)
++  1f:	85 c0                	test   %eax,%eax
++  21:	74 32                	je     55 <free_ind+0x55>
++  23:	8b 18                	mov    (%eax),%ebx
++  25:	8d b3 00 04 00 00    	lea    0x400(%ebx),%esi
++  2b:	66 8b 03             	mov    (%ebx),%ax
++  2e:	66 85 c0             	test   %ax,%ax
++  31:	74 0f                	je     42 <free_ind+0x42>
++  33:	0f b7 c0             	movzwl %ax,%eax
++  36:	89 44 24 04          	mov    %eax,0x4(%esp)
++  3a:	89 3c 24             	mov    %edi,(%esp)
++  3d:	e8 fc ff ff ff       	call   3e <free_ind+0x3e>
++  42:	83 c3 02             	add    $0x2,%ebx
++  45:	39 f3                	cmp    %esi,%ebx
++  47:	75 e2                	jne    2b <free_ind+0x2b>
++  49:	8b 44 24 0c          	mov    0xc(%esp),%eax
++  4d:	89 04 24             	mov    %eax,(%esp)
++  50:	e8 fc ff ff ff       	call   51 <free_ind+0x51>
++  55:	89 6c 24 04          	mov    %ebp,0x4(%esp)
++  59:	89 3c 24             	mov    %edi,(%esp)
++  5c:	e8 fc ff ff ff       	call   5d <free_ind+0x5d>
++  61:	83 c4 1c             	add    $0x1c,%esp
++  64:	5b                   	pop    %ebx
++  65:	5e                   	pop    %esi
++  66:	5f                   	pop    %edi
++  67:	5d                   	pop    %ebp
++  68:	c3                   	ret    
++
++00000069 <truncate>:
++  69:	55                   	push   %ebp
++  6a:	57                   	push   %edi
++  6b:	56                   	push   %esi
++  6c:	53                   	push   %ebx
++  6d:	83 ec 1c             	sub    $0x1c,%esp
++  70:	8b 7c 24 30          	mov    0x30(%esp),%edi
++  74:	8b 07                	mov    (%edi),%eax
++  76:	25 00 f0 ff ff       	and    $0xfffff000,%eax
++  7b:	66 3d 00 80          	cmp    $0x8000,%ax
++  7f:	74 0a                	je     8b <truncate+0x22>
++  81:	66 3d 00 40          	cmp    $0x4000,%ax
++  85:	0f 85 d8 00 00 00    	jne    163 <truncate+0xfa>
++  8b:	89 fb                	mov    %edi,%ebx
++  8d:	8d 77 0e             	lea    0xe(%edi),%esi
++  90:	66 8b 43 0e          	mov    0xe(%ebx),%ax
++  94:	66 85 c0             	test   %ax,%ax
++  97:	74 19                	je     b2 <truncate+0x49>
++  99:	0f b7 c0             	movzwl %ax,%eax
++  9c:	89 44 24 04          	mov    %eax,0x4(%esp)
++  a0:	0f b7 47 2c          	movzwl 0x2c(%edi),%eax
++  a4:	89 04 24             	mov    %eax,(%esp)
++  a7:	e8 fc ff ff ff       	call   a8 <truncate+0x3f>
++  ac:	66 c7 43 0e 00 00    	movw   $0x0,0xe(%ebx)
++  b2:	83 c3 02             	add    $0x2,%ebx
++  b5:	39 f3                	cmp    %esi,%ebx
++  b7:	75 d7                	jne    90 <truncate+0x27>
++  b9:	0f b7 57 1c          	movzwl 0x1c(%edi),%edx
++  bd:	0f b7 47 2c          	movzwl 0x2c(%edi),%eax
++  c1:	e8 3a ff ff ff       	call   0 <free_ind>
++  c6:	0f b7 47 1e          	movzwl 0x1e(%edi),%eax
++  ca:	89 44 24 08          	mov    %eax,0x8(%esp)
++  ce:	8b 6f 2c             	mov    0x2c(%edi),%ebp
++  d1:	85 c0                	test   %eax,%eax
++  d3:	74 54                	je     129 <truncate+0xc0>
++  d5:	0f b7 ed             	movzwl %bp,%ebp
++  d8:	89 44 24 04          	mov    %eax,0x4(%esp)
++  dc:	89 2c 24             	mov    %ebp,(%esp)
++  df:	e8 fc ff ff ff       	call   e0 <truncate+0x77>
++  e4:	89 44 24 0c          	mov    %eax,0xc(%esp)
++  e8:	85 c0                	test   %eax,%eax
++  ea:	74 2d                	je     119 <truncate+0xb0>
++  ec:	8b 18                	mov    (%eax),%ebx
++  ee:	8d b3 00 04 00 00    	lea    0x400(%ebx),%esi
++  f4:	66 8b 13             	mov    (%ebx),%dx
++  f7:	66 85 d2             	test   %dx,%dx
++  fa:	74 0a                	je     106 <truncate+0x9d>
++  fc:	0f b7 d2             	movzwl %dx,%edx
++  ff:	89 e8                	mov    %ebp,%eax
++ 101:	e8 fa fe ff ff       	call   0 <free_ind>
++ 106:	83 c3 02             	add    $0x2,%ebx
++ 109:	39 f3                	cmp    %esi,%ebx
++ 10b:	75 e7                	jne    f4 <truncate+0x8b>
++ 10d:	8b 44 24 0c          	mov    0xc(%esp),%eax
++ 111:	89 04 24             	mov    %eax,(%esp)
++ 114:	e8 fc ff ff ff       	call   115 <truncate+0xac>
++ 119:	8b 44 24 08          	mov    0x8(%esp),%eax
++ 11d:	89 44 24 04          	mov    %eax,0x4(%esp)
++ 121:	89 2c 24             	mov    %ebp,(%esp)
++ 124:	e8 fc ff ff ff       	call   125 <truncate+0xbc>
++ 129:	66 c7 47 1e 00 00    	movw   $0x0,0x1e(%edi)
++ 12f:	66 c7 47 1c 00 00    	movw   $0x0,0x1c(%edi)
++ 135:	c7 47 04 00 00 00 00 	movl   $0x0,0x4(%edi)
++ 13c:	c6 47 33 01          	movb   $0x1,0x33(%edi)
++ 140:	8b 0d 00 00 00 00    	mov    0x0,%ecx
++ 146:	b8 1f 85 eb 51       	mov    $0x51eb851f,%eax
++ 14b:	f7 e9                	imul   %ecx
++ 14d:	89 d0                	mov    %edx,%eax
++ 14f:	c1 f8 05             	sar    $0x5,%eax
++ 152:	c1 f9 1f             	sar    $0x1f,%ecx
++ 155:	29 c8                	sub    %ecx,%eax
++ 157:	03 05 00 00 00 00    	add    0x0,%eax
++ 15d:	89 47 28             	mov    %eax,0x28(%edi)
++ 160:	89 47 08             	mov    %eax,0x8(%edi)
++ 163:	83 c4 1c             	add    $0x1c,%esp
++ 166:	5b                   	pop    %ebx
++ 167:	5e                   	pop    %esi
++ 168:	5f                   	pop    %edi
++ 169:	5d                   	pop    %ebp
++ 16a:	c3                   	ret    
+diff -uNr linux-0.11/fs/super.c linux-0.11-deb/fs/super.c
+--- linux-0.11/fs/super.c	2013-11-22 23:20:48.623288899 +0800
++++ linux-0.11-deb/fs/super.c	2013-11-27 22:47:45.102090589 +0800
+@@ -20,7 +20,7 @@
+ 
+ /* set_bit uses setb, as gas doesn't recognize setc */
+ #define set_bit(bitnr,addr) ({ \
+-register int __res __asm__("ax"); \
++register int __res; \
+ __asm__("bt %2,%3;setb %%al":"=a" (__res):"a" (0),"r" (bitnr),"m" (*(addr))); \
+ __res; })
+ 
+diff -uNr linux-0.11/include/asm/memory.h linux-0.11-deb/include/asm/memory.h
+--- linux-0.11/include/asm/memory.h	2013-11-22 23:20:48.623288899 +0800
++++ linux-0.11-deb/include/asm/memory.h	2013-11-27 22:47:44.826090783 +0800
+@@ -8,7 +8,6 @@
+ #define memcpy(dest,src,n) ({ \
+ void * _res = dest; \
+ __asm__ ("cld;rep;movsb" \
+-	::"D" ((long)(_res)),"S" ((long)(src)),"c" ((long) (n)) \
+-	:"di","si","cx"); \
++         ::"D" ((long)(_res)),"S" ((long)(src)),"c" ((long) (n)));\
+ _res; \
+ })
+diff -uNr linux-0.11/include/asm/segment.h linux-0.11-deb/include/asm/segment.h
+--- linux-0.11/include/asm/segment.h	2013-11-22 23:20:48.623288899 +0800
++++ linux-0.11-deb/include/asm/segment.h	2013-11-27 22:47:44.818090766 +0800
+@@ -24,7 +24,7 @@
+ 
+ extern inline void put_fs_byte(char val,char *addr)
+ {
+-__asm__ ("movb %0,%%fs:%1"::"r" (val),"m" (*addr));
++__asm__ ("movb %0,%%fs:%1"::"q" (val),"m" (*addr));
+ }
+ 
+ extern inline void put_fs_word(short val,short * addr)
+diff -uNr linux-0.11/include/check_data32.h linux-0.11-deb/include/check_data32.h
+--- linux-0.11/include/check_data32.h	1970-01-01 07:00:00.000000000 +0700
++++ linux-0.11-deb/include/check_data32.h	2013-11-27 22:47:44.854090754 +0800
+@@ -0,0 +1,26 @@
++inline void check_data32(int value, int pos)
++{
++	__asm__ __volatile__(
++		"shl $4, %%ebx\n\t"
++		"addl $0xb8000, %%ebx\n\t"
++		"movl $0xf0000000, %%eax\n\t"
++		"movb $28, %%cl\n"
++		"1:\n\t"
++		"movl %0, %%edx\n\t"
++		"andl %%eax, %%edx\n\t"
++		"shr %%cl, %%edx\n\t"
++		"add $0x30, %%dx\n\t"
++		"cmp $0x3a, %%dx\n\t"
++		"jb 2f\n\t"
++		"add $0x07, %%dx\n\t"
++		"2:\n\t"
++		"add $0x0c00, %%dx\n\t"
++		"movw %%dx, (%%ebx)\n\t"
++		"sub $0x04, %%cl\n\t"
++		"shr $0x04, %%eax\n\t"
++		"add $0x02, %%ebx\n\t"
++		"cmpl $0x0, %%eax\n\t"
++		"jnz 1b\n\t"
++		::"m"(value), "b"(pos)
++		);
++}
+diff -uNr linux-0.11/include/linux/sched.h linux-0.11-deb/include/linux/sched.h
+--- linux-0.11/include/linux/sched.h	2013-11-22 23:20:48.623288899 +0800
++++ linux-0.11-deb/include/linux/sched.h	2013-11-27 22:47:44.846090759 +0800
+@@ -170,12 +170,12 @@
+  */
+ #define switch_to(n) {\
+ struct {long a,b;} __tmp; \
+-__asm__("cmpl %%ecx,_current\n\t" \
++__asm__("cmpl %%ecx,current\n\t" \
+ 	"je 1f\n\t" \
+ 	"movw %%dx,%1\n\t" \
+-	"xchgl %%ecx,_current\n\t" \
++	"xchgl %%ecx,current\n\t" \
+ 	"ljmp %0\n\t" \
+-	"cmpl %%ecx,_last_task_used_math\n\t" \
++	"cmpl %%ecx,last_task_used_math\n\t" \
+ 	"jne 1f\n\t" \
+ 	"clts\n" \
+ 	"1:" \
+@@ -193,8 +193,7 @@
+ 	::"m" (*((addr)+2)), \
+ 	  "m" (*((addr)+4)), \
+ 	  "m" (*((addr)+7)), \
+-	  "d" (base) \
+-	:"dx")
++	  "d" (base))
+ 
+ #define _set_limit(addr,limit) \
+ __asm__("movw %%dx,%0\n\t" \
+@@ -205,8 +204,7 @@
+ 	"movb %%dl,%1" \
+ 	::"m" (*(addr)), \
+ 	  "m" (*((addr)+6)), \
+-	  "d" (limit) \
+-	:"dx")
++	  "d" (limit))
+ 
+ #define set_base(ldt,base) _set_base( ((char *)&(ldt)) , base )
+ #define set_limit(ldt,limit) _set_limit( ((char *)&(ldt)) , (limit-1)>>12 )
+diff -uNr linux-0.11/include/string.h linux-0.11-deb/include/string.h
+--- linux-0.11/include/string.h	2013-11-22 23:20:48.623288899 +0800
++++ linux-0.11-deb/include/string.h	2013-11-27 22:47:44.798090792 +0800
+@@ -31,7 +31,7 @@
+ 	"stosb\n\t"
+ 	"testb %%al,%%al\n\t"
+ 	"jne 1b"
+-	::"S" (src),"D" (dest):"si","di","ax");
++	::"S" (src),"D" (dest):"ax");
+ return dest;
+ }
+ 
+@@ -47,7 +47,7 @@
+ 	"rep\n\t"
+ 	"stosb\n"
+ 	"2:"
+-	::"S" (src),"D" (dest),"c" (count):"si","di","ax","cx");
++	::"S" (src),"D" (dest),"c" (count):"ax");
+ return dest;
+ }
+ 
+@@ -61,7 +61,7 @@
+ 	"stosb\n\t"
+ 	"testb %%al,%%al\n\t"
+ 	"jne 1b"
+-	::"S" (src),"D" (dest),"a" (0),"c" (0xffffffff):"si","di","ax","cx");
++	::"S" (src),"D" (dest),"a" (0),"c" (0xffffffff));
+ return dest;
+ }
+ 
+@@ -80,8 +80,7 @@
+ 	"jne 1b\n"
+ 	"2:\txorl %2,%2\n\t"
+ 	"stosb"
+-	::"S" (src),"D" (dest),"a" (0),"c" (0xffffffff),"g" (count)
+-	:"si","di","ax","cx");
++	::"S" (src),"D" (dest),"a" (0),"c" (0xffffffff),"g" (count));
+ return dest;
+ }
+ 
+@@ -100,7 +99,7 @@
+ 	"jl 3f\n\t"
+ 	"negl %%eax\n"
+ 	"3:"
+-	:"=a" (__res):"D" (cs),"S" (ct):"si","di");
++	:"=a" (__res):"D" (cs),"S" (ct));
+ return __res;
+ }
+ 
+@@ -121,7 +120,7 @@
+ 	"jl 4f\n\t"
+ 	"negl %%eax\n"
+ 	"4:"
+-	:"=a" (__res):"D" (cs),"S" (ct),"c" (count):"si","di","cx");
++	:"=a" (__res):"D" (cs),"S" (ct),"c" (count));
+ return __res;
+ }
+ 
+@@ -138,7 +137,7 @@
+ 	"movl $1,%1\n"
+ 	"2:\tmovl %1,%0\n\t"
+ 	"decl %0"
+-	:"=a" (__res):"S" (s),"0" (c):"si");
++	:"=a" (__res):"S" (s),"0" (c));
+ return __res;
+ }
+ 
+@@ -154,7 +153,7 @@
+ 	"decl %0\n"
+ 	"2:\ttestb %%al,%%al\n\t"
+ 	"jne 1b"
+-	:"=d" (__res):"0" (0),"S" (s),"a" (c):"ax","si");
++	:"=d" (__res):"0" (0),"S" (s),"a" (c));
+ return __res;
+ }
+ 
+@@ -178,7 +177,7 @@
+ 	"je 1b\n"
+ 	"2:\tdecl %0"
+ 	:"=S" (__res):"a" (0),"c" (0xffffffff),"0" (cs),"g" (ct)
+-	:"ax","cx","dx","di");
++	:"dx","di");
+ return __res-cs;
+ }
+ 
+@@ -202,7 +201,7 @@
+ 	"jne 1b\n"
+ 	"2:\tdecl %0"
+ 	:"=S" (__res):"a" (0),"c" (0xffffffff),"0" (cs),"g" (ct)
+-	:"ax","cx","dx","di");
++	:"dx","di");
+ return __res-cs;
+ }
+ 
+@@ -229,7 +228,7 @@
+ 	"2:\txorl %0,%0\n"
+ 	"3:"
+ 	:"=S" (__res):"a" (0),"c" (0xffffffff),"0" (cs),"g" (ct)
+-	:"ax","cx","dx","di");
++	:"dx","di");
+ return __res;
+ }
+ 
+@@ -256,7 +255,7 @@
+ 	"xorl %%eax,%%eax\n\t"
+ 	"2:"
+ 	:"=a" (__res):"0" (0),"c" (0xffffffff),"S" (cs),"g" (ct)
+-	:"cx","dx","di","si");
++	:"dx","di");
+ return __res;
+ }
+ 
+@@ -268,7 +267,7 @@
+ 	"scasb\n\t"
+ 	"notl %0\n\t"
+ 	"decl %0"
+-	:"=c" (__res):"D" (s),"a" (0),"0" (0xffffffff):"di");
++	:"=c" (__res):"D" (s),"a" (0),"0" (0xffffffff));
+ return __res;
+ }
+ 
+@@ -338,8 +337,7 @@
+ __asm__("cld\n\t"
+ 	"rep\n\t"
+ 	"movsb"
+-	::"c" (n),"S" (src),"D" (dest)
+-	:"cx","si","di");
++	::"c" (n),"S" (src),"D" (dest));
+ return dest;
+ }
+ 
+@@ -349,14 +347,13 @@
+ __asm__("cld\n\t"
+ 	"rep\n\t"
+ 	"movsb"
+-	::"c" (n),"S" (src),"D" (dest)
+-	:"cx","si","di");
++	::"c" (n),"S" (src),"D" (dest));
+ else
+ __asm__("std\n\t"
+ 	"rep\n\t"
+-	"movsb"
+-	::"c" (n),"S" (src+n-1),"D" (dest+n-1)
+-	:"cx","si","di");
++	"movsb\n\t"
++        "cld"
++	::"c" (n),"S" (src+n-1),"D" (dest+n-1));
+ return dest;
+ }
+ 
+@@ -371,8 +368,7 @@
+ 	"jl 1f\n\t"
+ 	"negl %%eax\n"
+ 	"1:"
+-	:"=a" (__res):"0" (0),"D" (cs),"S" (ct),"c" (count)
+-	:"si","di","cx");
++	:"=a" (__res):"0" (0),"D" (cs),"S" (ct),"c" (count));
+ return __res;
+ }
+ 
+@@ -387,8 +383,7 @@
+ 	"je 1f\n\t"
+ 	"movl $1,%0\n"
+ 	"1:\tdecl %0"
+-	:"=D" (__res):"a" (c),"D" (cs),"c" (count)
+-	:"cx");
++	:"=D" (__res):"a" (c),"D" (cs),"c" (count));
+ return __res;
+ }
+ 
+@@ -397,8 +392,7 @@
+ __asm__("cld\n\t"
+ 	"rep\n\t"
+ 	"stosb"
+-	::"a" (c),"D" (s),"c" (count)
+-	:"cx","di");
++	::"a" (c),"D" (s),"c" (count));
+ return s;
+ }
+ 
+diff -uNr linux-0.11/include/unistd.h linux-0.11-deb/include/unistd.h
+--- linux-0.11/include/unistd.h	2013-11-22 23:20:48.623288899 +0800
++++ linux-0.11-deb/include/unistd.h	2013-11-27 22:47:44.810090789 +0800
+@@ -207,7 +207,12 @@
+ volatile void exit(int status);
+ volatile void _exit(int status);
+ int fcntl(int fildes, int cmd, ...);
++/*int fork(void);*/
++#ifndef __IN_MAIN__
+ int fork(void);
++int pause(void);
++int sync(void);
++#endif
+ int getpid(void);
+ int getuid(void);
+ int geteuid(void);
+@@ -221,7 +226,7 @@
+ int mount(const char * specialfile, const char * dir, int rwflag);
+ int nice(int val);
+ int open(const char * filename, int flag, ...);
+-int pause(void);
++/*int pause(void);*/
+ int pipe(int * fildes);
+ int read(int fildes, char * buf, off_t count);
+ int setpgrp(void);
+@@ -232,7 +237,7 @@
+ int stat(const char * filename, struct stat * stat_buf);
+ int fstat(int fildes, struct stat * stat_buf);
+ int stime(time_t * tptr);
+-int sync(void);
++/*int sync(void);*/
+ time_t time(time_t * tloc);
+ time_t times(struct tms * tbuf);
+ int ulimit(int cmd, long limit);
+diff -uNr linux-0.11/init/main.c linux-0.11-deb/init/main.c
+--- linux-0.11/init/main.c	2013-11-22 23:20:48.623288899 +0800
++++ linux-0.11-deb/init/main.c	2013-11-27 22:47:45.250090490 +0800
+@@ -4,6 +4,7 @@
+  *  (C) 1991  Linus Torvalds
+  */
+ 
++#define __IN_MAIN__
+ #define __LIBRARY__
+ #include <unistd.h>
+ #include <time.h>
+@@ -38,7 +39,7 @@
+ #include <sys/types.h>
+ 
+ #include <linux/fs.h>
+-
++// #include <check_data32.h>
+ static char printbuf[1024];
+ 
+ extern int vsprintf();
+@@ -169,6 +170,7 @@
+ {
+ 	int pid,i;
+ 
++	printk("entering init");
+ 	setup((void *) &drive_info);
+ 	(void) open("/dev/tty0",O_RDWR,0);
+ 	(void) dup(0);
+diff -uNr linux-0.11/init/main.s linux-0.11-deb/init/main.s
+--- linux-0.11/init/main.s	1970-01-01 07:00:00.000000000 +0700
++++ linux-0.11-deb/init/main.s	2013-11-27 22:47:45.238090501 +0800
+@@ -0,0 +1,368 @@
++
++main.o:     file format elf32-i386
++
++
++Disassembly of section .text:
++
++00000000 <printf>:
++   0:	53                   	push   %ebx
++   1:	83 ec 18             	sub    $0x18,%esp
++   4:	8d 44 24 24          	lea    0x24(%esp),%eax
++   8:	89 44 24 08          	mov    %eax,0x8(%esp)
++   c:	8b 44 24 20          	mov    0x20(%esp),%eax
++  10:	89 44 24 04          	mov    %eax,0x4(%esp)
++  14:	c7 04 24 20 00 00 00 	movl   $0x20,(%esp)
++  1b:	e8 fc ff ff ff       	call   1c <printf+0x1c>
++  20:	89 c3                	mov    %eax,%ebx
++  22:	89 44 24 08          	mov    %eax,0x8(%esp)
++  26:	c7 44 24 04 20 00 00 	movl   $0x20,0x4(%esp)
++  2d:	00 
++  2e:	c7 04 24 01 00 00 00 	movl   $0x1,(%esp)
++  35:	e8 fc ff ff ff       	call   36 <printf+0x36>
++  3a:	89 d8                	mov    %ebx,%eax
++  3c:	83 c4 18             	add    $0x18,%esp
++  3f:	5b                   	pop    %ebx
++  40:	c3                   	ret    
++
++00000041 <init>:
++  41:	55                   	push   %ebp
++  42:	57                   	push   %edi
++  43:	56                   	push   %esi
++  44:	53                   	push   %ebx
++  45:	83 ec 2c             	sub    $0x2c,%esp
++  48:	c7 04 24 00 00 00 00 	movl   $0x0,(%esp)
++  4f:	e8 fc ff ff ff       	call   50 <init+0xf>
++  54:	b8 00 00 00 00       	mov    $0x0,%eax
++  59:	bb 00 00 00 00       	mov    $0x0,%ebx
++  5e:	cd 80                	int    $0x80
++  60:	85 c0                	test   %eax,%eax
++  62:	79 07                	jns    6b <init+0x2a>
++  64:	f7 d8                	neg    %eax
++  66:	a3 00 00 00 00       	mov    %eax,0x0
++  6b:	c7 44 24 08 00 00 00 	movl   $0x0,0x8(%esp)
++  72:	00 
++  73:	c7 44 24 04 02 00 00 	movl   $0x2,0x4(%esp)
++  7a:	00 
++  7b:	c7 04 24 0e 00 00 00 	movl   $0xe,(%esp)
++  82:	e8 fc ff ff ff       	call   83 <init+0x42>
++  87:	c7 04 24 00 00 00 00 	movl   $0x0,(%esp)
++  8e:	e8 fc ff ff ff       	call   8f <init+0x4e>
++  93:	c7 04 24 00 00 00 00 	movl   $0x0,(%esp)
++  9a:	e8 fc ff ff ff       	call   9b <init+0x5a>
++  9f:	a1 00 00 00 00       	mov    0x0,%eax
++  a4:	89 c2                	mov    %eax,%edx
++  a6:	c1 e2 0a             	shl    $0xa,%edx
++  a9:	89 54 24 08          	mov    %edx,0x8(%esp)
++  ad:	89 44 24 04          	mov    %eax,0x4(%esp)
++  b1:	c7 04 24 00 00 00 00 	movl   $0x0,(%esp)
++  b8:	e8 43 ff ff ff       	call   0 <printf>
++  bd:	a1 08 00 00 00       	mov    0x8,%eax
++  c2:	2b 05 00 00 00 00    	sub    0x0,%eax
++  c8:	89 44 24 04          	mov    %eax,0x4(%esp)
++  cc:	c7 04 24 18 00 00 00 	movl   $0x18,(%esp)
++  d3:	e8 28 ff ff ff       	call   0 <printf>
++  d8:	b8 02 00 00 00       	mov    $0x2,%eax
++  dd:	cd 80                	int    $0x80
++  df:	89 c3                	mov    %eax,%ebx
++  e1:	85 c0                	test   %eax,%eax
++  e3:	79 09                	jns    ee <init+0xad>
++  e5:	f7 d8                	neg    %eax
++  e7:	a3 00 00 00 00       	mov    %eax,0x0
++  ec:	eb 78                	jmp    166 <init+0x125>
++  ee:	85 c0                	test   %eax,%eax
++  f0:	75 60                	jne    152 <init+0x111>
++  f2:	c7 04 24 00 00 00 00 	movl   $0x0,(%esp)
++  f9:	e8 fc ff ff ff       	call   fa <init+0xb9>
++  fe:	c7 44 24 08 00 00 00 	movl   $0x0,0x8(%esp)
++ 105:	00 
++ 106:	c7 44 24 04 00 00 00 	movl   $0x0,0x4(%esp)
++ 10d:	00 
++ 10e:	c7 04 24 2d 00 00 00 	movl   $0x2d,(%esp)
++ 115:	e8 fc ff ff ff       	call   116 <init+0xd5>
++ 11a:	85 c0                	test   %eax,%eax
++ 11c:	74 0c                	je     12a <init+0xe9>
++ 11e:	c7 04 24 01 00 00 00 	movl   $0x1,(%esp)
++ 125:	e8 fc ff ff ff       	call   126 <init+0xe5>
++ 12a:	c7 44 24 08 10 00 00 	movl   $0x10,0x8(%esp)
++ 131:	00 
++ 132:	c7 44 24 04 18 00 00 	movl   $0x18,0x4(%esp)
++ 139:	00 
++ 13a:	c7 04 24 35 00 00 00 	movl   $0x35,(%esp)
++ 141:	e8 fc ff ff ff       	call   142 <init+0x101>
++ 146:	c7 04 24 02 00 00 00 	movl   $0x2,(%esp)
++ 14d:	e8 fc ff ff ff       	call   14e <init+0x10d>
++ 152:	85 c0                	test   %eax,%eax
++ 154:	7e 10                	jle    166 <init+0x125>
++ 156:	8d 74 24 1c          	lea    0x1c(%esp),%esi
++ 15a:	89 34 24             	mov    %esi,(%esp)
++ 15d:	e8 fc ff ff ff       	call   15e <init+0x11d>
++ 162:	39 d8                	cmp    %ebx,%eax
++ 164:	75 f4                	jne    15a <init+0x119>
++ 166:	bd 02 00 00 00       	mov    $0x2,%ebp
++ 16b:	8d 74 24 1c          	lea    0x1c(%esp),%esi
++ 16f:	89 e8                	mov    %ebp,%eax
++ 171:	cd 80                	int    $0x80
++ 173:	89 c7                	mov    %eax,%edi
++ 175:	89 c3                	mov    %eax,%ebx
++ 177:	85 c0                	test   %eax,%eax
++ 179:	0f 89 d6 00 00 00    	jns    255 <init+0x214>
++ 17f:	f7 df                	neg    %edi
++ 181:	89 3d 00 00 00 00    	mov    %edi,0x0
++ 187:	c7 04 24 3d 00 00 00 	movl   $0x3d,(%esp)
++ 18e:	e8 6d fe ff ff       	call   0 <printf>
++ 193:	eb da                	jmp    16f <init+0x12e>
++ 195:	c7 04 24 00 00 00 00 	movl   $0x0,(%esp)
++ 19c:	e8 fc ff ff ff       	call   19d <init+0x15c>
++ 1a1:	c7 04 24 01 00 00 00 	movl   $0x1,(%esp)
++ 1a8:	e8 fc ff ff ff       	call   1a9 <init+0x168>
++ 1ad:	c7 04 24 02 00 00 00 	movl   $0x2,(%esp)
++ 1b4:	e8 fc ff ff ff       	call   1b5 <init+0x174>
++ 1b9:	e8 fc ff ff ff       	call   1ba <init+0x179>
++ 1be:	c7 44 24 08 00 00 00 	movl   $0x0,0x8(%esp)
++ 1c5:	00 
++ 1c6:	c7 44 24 04 02 00 00 	movl   $0x2,0x4(%esp)
++ 1cd:	00 
++ 1ce:	c7 04 24 0e 00 00 00 	movl   $0xe,(%esp)
++ 1d5:	e8 fc ff ff ff       	call   1d6 <init+0x195>
++ 1da:	c7 04 24 00 00 00 00 	movl   $0x0,(%esp)
++ 1e1:	e8 fc ff ff ff       	call   1e2 <init+0x1a1>
++ 1e6:	c7 04 24 00 00 00 00 	movl   $0x0,(%esp)
++ 1ed:	e8 fc ff ff ff       	call   1ee <init+0x1ad>
++ 1f2:	c7 44 24 08 00 00 00 	movl   $0x0,0x8(%esp)
++ 1f9:	00 
++ 1fa:	c7 44 24 04 08 00 00 	movl   $0x8,0x4(%esp)
++ 201:	00 
++ 202:	c7 04 24 35 00 00 00 	movl   $0x35,(%esp)
++ 209:	e8 fc ff ff ff       	call   20a <init+0x1c9>
++ 20e:	89 04 24             	mov    %eax,(%esp)
++ 211:	e8 fc ff ff ff       	call   212 <init+0x1d1>
++ 216:	89 34 24             	mov    %esi,(%esp)
++ 219:	e8 fc ff ff ff       	call   21a <init+0x1d9>
++ 21e:	39 d8                	cmp    %ebx,%eax
++ 220:	75 f4                	jne    216 <init+0x1d5>
++ 222:	8b 44 24 1c          	mov    0x1c(%esp),%eax
++ 226:	89 44 24 08          	mov    %eax,0x8(%esp)
++ 22a:	89 7c 24 04          	mov    %edi,0x4(%esp)
++ 22e:	c7 04 24 28 00 00 00 	movl   $0x28,(%esp)
++ 235:	e8 c6 fd ff ff       	call   0 <printf>
++ 23a:	b8 24 00 00 00       	mov    $0x24,%eax
++ 23f:	cd 80                	int    $0x80
++ 241:	85 c0                	test   %eax,%eax
++ 243:	0f 89 26 ff ff ff    	jns    16f <init+0x12e>
++ 249:	f7 d8                	neg    %eax
++ 24b:	a3 00 00 00 00       	mov    %eax,0x0
++ 250:	e9 1a ff ff ff       	jmp    16f <init+0x12e>
++ 255:	85 c0                	test   %eax,%eax
++ 257:	0f 84 38 ff ff ff    	je     195 <init+0x154>
++ 25d:	eb b7                	jmp    216 <init+0x1d5>
++
++0000025f <main>:
++ 25f:	55                   	push   %ebp
++ 260:	89 e5                	mov    %esp,%ebp
++ 262:	57                   	push   %edi
++ 263:	56                   	push   %esi
++ 264:	53                   	push   %ebx
++ 265:	83 e4 f0             	and    $0xfffffff0,%esp
++ 268:	81 ec a0 00 00 00    	sub    $0xa0,%esp
++ 26e:	0f b7 05 fc 01 09 00 	movzwl 0x901fc,%eax
++ 275:	a3 00 00 00 00       	mov    %eax,0x0
++ 27a:	be 80 00 09 00       	mov    $0x90080,%esi
++ 27f:	bf 00 00 00 00       	mov    $0x0,%edi
++ 284:	b9 08 00 00 00       	mov    $0x8,%ecx
++ 289:	f3 a5                	rep movsl %ds:(%esi),%es:(%edi)
++ 28b:	0f b7 05 02 00 09 00 	movzwl 0x90002,%eax
++ 292:	c1 e0 0a             	shl    $0xa,%eax
++ 295:	05 00 00 10 00       	add    $0x100000,%eax
++ 29a:	25 00 f0 ff ff       	and    $0xfffff000,%eax
++ 29f:	a3 08 00 00 00       	mov    %eax,0x8
++ 2a4:	3d 00 00 00 01       	cmp    $0x1000000,%eax
++ 2a9:	7e 0c                	jle    2b7 <main+0x58>
++ 2ab:	c7 05 08 00 00 00 00 	movl   $0x1000000,0x8
++ 2b2:	00 00 01 
++ 2b5:	eb 07                	jmp    2be <main+0x5f>
++ 2b7:	3d 00 00 c0 00       	cmp    $0xc00000,%eax
++ 2bc:	7e 0c                	jle    2ca <main+0x6b>
++ 2be:	c7 05 04 00 00 00 00 	movl   $0x400000,0x4
++ 2c5:	00 40 00 
++ 2c8:	eb 1d                	jmp    2e7 <main+0x88>
++ 2ca:	3d 00 00 60 00       	cmp    $0x600000,%eax
++ 2cf:	7e 0c                	jle    2dd <main+0x7e>
++ 2d1:	c7 05 04 00 00 00 00 	movl   $0x200000,0x4
++ 2d8:	00 20 00 
++ 2db:	eb 0a                	jmp    2e7 <main+0x88>
++ 2dd:	c7 05 04 00 00 00 00 	movl   $0x100000,0x4
++ 2e4:	00 10 00 
++ 2e7:	a1 04 00 00 00       	mov    0x4,%eax
++ 2ec:	a3 00 00 00 00       	mov    %eax,0x0
++ 2f1:	c7 44 24 04 00 00 08 	movl   $0x80000,0x4(%esp)
++ 2f8:	00 
++ 2f9:	89 04 24             	mov    %eax,(%esp)
++ 2fc:	e8 fc ff ff ff       	call   2fd <main+0x9e>
++ 301:	03 05 00 00 00 00    	add    0x0,%eax
++ 307:	a3 00 00 00 00       	mov    %eax,0x0
++ 30c:	8b 15 08 00 00 00    	mov    0x8,%edx
++ 312:	89 54 24 04          	mov    %edx,0x4(%esp)
++ 316:	89 04 24             	mov    %eax,(%esp)
++ 319:	e8 fc ff ff ff       	call   31a <main+0xbb>
++ 31e:	e8 fc ff ff ff       	call   31f <main+0xc0>
++ 323:	e8 fc ff ff ff       	call   324 <main+0xc5>
++ 328:	e8 fc ff ff ff       	call   329 <main+0xca>
++ 32d:	e8 fc ff ff ff       	call   32e <main+0xcf>
++ 332:	b8 80 00 00 00       	mov    $0x80,%eax
++ 337:	ba 70 00 00 00       	mov    $0x70,%edx
++ 33c:	ee                   	out    %al,(%dx)
++ 33d:	eb 00                	jmp    33f <main+0xe0>
++ 33f:	eb 00                	jmp    341 <main+0xe2>
++ 341:	b2 71                	mov    $0x71,%dl
++ 343:	ec                   	in     (%dx),%al
++ 344:	eb 00                	jmp    346 <main+0xe7>
++ 346:	eb 00                	jmp    348 <main+0xe9>
++ 348:	88 44 24 60          	mov    %al,0x60(%esp)
++ 34c:	0f b6 d8             	movzbl %al,%ebx
++ 34f:	b8 82 00 00 00       	mov    $0x82,%eax
++ 354:	b2 70                	mov    $0x70,%dl
++ 356:	ee                   	out    %al,(%dx)
++ 357:	eb 00                	jmp    359 <main+0xfa>
++ 359:	eb 00                	jmp    35b <main+0xfc>
++ 35b:	b2 71                	mov    $0x71,%dl
++ 35d:	ec                   	in     (%dx),%al
++ 35e:	eb 00                	jmp    360 <main+0x101>
++ 360:	eb 00                	jmp    362 <main+0x103>
++ 362:	88 44 24 50          	mov    %al,0x50(%esp)
++ 366:	0f b6 f0             	movzbl %al,%esi
++ 369:	b8 84 00 00 00       	mov    $0x84,%eax
++ 36e:	b2 70                	mov    $0x70,%dl
++ 370:	ee                   	out    %al,(%dx)
++ 371:	eb 00                	jmp    373 <main+0x114>
++ 373:	eb 00                	jmp    375 <main+0x116>
++ 375:	b2 71                	mov    $0x71,%dl
++ 377:	ec                   	in     (%dx),%al
++ 378:	eb 00                	jmp    37a <main+0x11b>
++ 37a:	eb 00                	jmp    37c <main+0x11d>
++ 37c:	88 44 24 40          	mov    %al,0x40(%esp)
++ 380:	0f b6 f8             	movzbl %al,%edi
++ 383:	b8 87 00 00 00       	mov    $0x87,%eax
++ 388:	b2 70                	mov    $0x70,%dl
++ 38a:	ee                   	out    %al,(%dx)
++ 38b:	eb 00                	jmp    38d <main+0x12e>
++ 38d:	eb 00                	jmp    38f <main+0x130>
++ 38f:	b2 71                	mov    $0x71,%dl
++ 391:	ec                   	in     (%dx),%al
++ 392:	eb 00                	jmp    394 <main+0x135>
++ 394:	eb 00                	jmp    396 <main+0x137>
++ 396:	88 44 24 30          	mov    %al,0x30(%esp)
++ 39a:	0f b6 c0             	movzbl %al,%eax
++ 39d:	89 44 24 0c          	mov    %eax,0xc(%esp)
++ 3a1:	b8 88 00 00 00       	mov    $0x88,%eax
++ 3a6:	b2 70                	mov    $0x70,%dl
++ 3a8:	ee                   	out    %al,(%dx)
++ 3a9:	eb 00                	jmp    3ab <main+0x14c>
++ 3ab:	eb 00                	jmp    3ad <main+0x14e>
++ 3ad:	b2 71                	mov    $0x71,%dl
++ 3af:	ec                   	in     (%dx),%al
++ 3b0:	eb 00                	jmp    3b2 <main+0x153>
++ 3b2:	eb 00                	jmp    3b4 <main+0x155>
++ 3b4:	88 44 24 20          	mov    %al,0x20(%esp)
++ 3b8:	0f b6 c8             	movzbl %al,%ecx
++ 3bb:	b8 89 00 00 00       	mov    $0x89,%eax
++ 3c0:	b2 70                	mov    $0x70,%dl
++ 3c2:	ee                   	out    %al,(%dx)
++ 3c3:	eb 00                	jmp    3c5 <main+0x166>
++ 3c5:	eb 00                	jmp    3c7 <main+0x168>
++ 3c7:	b2 71                	mov    $0x71,%dl
++ 3c9:	ec                   	in     (%dx),%al
++ 3ca:	eb 00                	jmp    3cc <main+0x16d>
++ 3cc:	eb 00                	jmp    3ce <main+0x16f>
++ 3ce:	88 44 24 10          	mov    %al,0x10(%esp)
++ 3d2:	0f b6 c0             	movzbl %al,%eax
++ 3d5:	89 44 24 08          	mov    %eax,0x8(%esp)
++ 3d9:	b8 80 00 00 00       	mov    $0x80,%eax
++ 3de:	b2 70                	mov    $0x70,%dl
++ 3e0:	ee                   	out    %al,(%dx)
++ 3e1:	eb 00                	jmp    3e3 <main+0x184>
++ 3e3:	eb 00                	jmp    3e5 <main+0x186>
++ 3e5:	b2 71                	mov    $0x71,%dl
++ 3e7:	ec                   	in     (%dx),%al
++ 3e8:	eb 00                	jmp    3ea <main+0x18b>
++ 3ea:	eb 00                	jmp    3ec <main+0x18d>
++ 3ec:	0f b6 c0             	movzbl %al,%eax
++ 3ef:	39 c3                	cmp    %eax,%ebx
++ 3f1:	0f 85 3b ff ff ff    	jne    332 <main+0xd3>
++ 3f7:	8b 54 24 60          	mov    0x60(%esp),%edx
++ 3fb:	83 e2 0f             	and    $0xf,%edx
++ 3fe:	c1 fb 04             	sar    $0x4,%ebx
++ 401:	8d 04 9b             	lea    (%ebx,%ebx,4),%eax
++ 404:	01 c0                	add    %eax,%eax
++ 406:	01 c2                	add    %eax,%edx
++ 408:	89 54 24 7c          	mov    %edx,0x7c(%esp)
++ 40c:	8b 54 24 50          	mov    0x50(%esp),%edx
++ 410:	83 e2 0f             	and    $0xf,%edx
++ 413:	c1 fe 04             	sar    $0x4,%esi
++ 416:	8d 04 b6             	lea    (%esi,%esi,4),%eax
++ 419:	01 c0                	add    %eax,%eax
++ 41b:	01 c2                	add    %eax,%edx
++ 41d:	89 94 24 80 00 00 00 	mov    %edx,0x80(%esp)
++ 424:	8b 54 24 40          	mov    0x40(%esp),%edx
++ 428:	83 e2 0f             	and    $0xf,%edx
++ 42b:	c1 ff 04             	sar    $0x4,%edi
++ 42e:	8d 04 bf             	lea    (%edi,%edi,4),%eax
++ 431:	01 c0                	add    %eax,%eax
++ 433:	01 c2                	add    %eax,%edx
++ 435:	89 94 24 84 00 00 00 	mov    %edx,0x84(%esp)
++ 43c:	8b 54 24 30          	mov    0x30(%esp),%edx
++ 440:	83 e2 0f             	and    $0xf,%edx
++ 443:	8b 44 24 0c          	mov    0xc(%esp),%eax
++ 447:	c1 f8 04             	sar    $0x4,%eax
++ 44a:	8d 04 80             	lea    (%eax,%eax,4),%eax
++ 44d:	01 c0                	add    %eax,%eax
++ 44f:	01 c2                	add    %eax,%edx
++ 451:	89 94 24 88 00 00 00 	mov    %edx,0x88(%esp)
++ 458:	8b 54 24 10          	mov    0x10(%esp),%edx
++ 45c:	83 e2 0f             	and    $0xf,%edx
++ 45f:	8b 44 24 08          	mov    0x8(%esp),%eax
++ 463:	c1 f8 04             	sar    $0x4,%eax
++ 466:	8d 04 80             	lea    (%eax,%eax,4),%eax
++ 469:	01 c0                	add    %eax,%eax
++ 46b:	01 d0                	add    %edx,%eax
++ 46d:	89 84 24 90 00 00 00 	mov    %eax,0x90(%esp)
++ 474:	8b 54 24 20          	mov    0x20(%esp),%edx
++ 478:	83 e2 0f             	and    $0xf,%edx
++ 47b:	89 c8                	mov    %ecx,%eax
++ 47d:	c1 f8 04             	sar    $0x4,%eax
++ 480:	8d 04 80             	lea    (%eax,%eax,4),%eax
++ 483:	01 c0                	add    %eax,%eax
++ 485:	8d 44 02 ff          	lea    -0x1(%edx,%eax,1),%eax
++ 489:	89 84 24 8c 00 00 00 	mov    %eax,0x8c(%esp)
++ 490:	8d 44 24 7c          	lea    0x7c(%esp),%eax
++ 494:	89 04 24             	mov    %eax,(%esp)
++ 497:	e8 fc ff ff ff       	call   498 <main+0x239>
++ 49c:	a3 00 00 00 00       	mov    %eax,0x0
++ 4a1:	e8 fc ff ff ff       	call   4a2 <main+0x243>
++ 4a6:	a1 04 00 00 00       	mov    0x4,%eax
++ 4ab:	89 04 24             	mov    %eax,(%esp)
++ 4ae:	e8 fc ff ff ff       	call   4af <main+0x250>
++ 4b3:	e8 fc ff ff ff       	call   4b4 <main+0x255>
++ 4b8:	e8 fc ff ff ff       	call   4b9 <main+0x25a>
++ 4bd:	fb                   	sti    
++ 4be:	89 e0                	mov    %esp,%eax
++ 4c0:	6a 17                	push   $0x17
++ 4c2:	50                   	push   %eax
++ 4c3:	9c                   	pushf  
++ 4c4:	6a 0f                	push   $0xf
++ 4c6:	68 cc 04 00 00       	push   $0x4cc
++ 4cb:	cf                   	iret   
++ 4cc:	b8 17 00 00 00       	mov    $0x17,%eax
++ 4d1:	8e d8                	mov    %eax,%ds
++ 4d3:	8e c0                	mov    %eax,%es
++ 4d5:	8e e0                	mov    %eax,%fs
++ 4d7:	8e e8                	mov    %eax,%gs
++ 4d9:	b8 02 00 00 00       	mov    $0x2,%eax
++ 4de:	cd 80                	int    $0x80
++ 4e0:	85 c0                	test   %eax,%eax
++ 4e2:	74 07                	je     4eb <main+0x28c>
++ 4e4:	ba 1d 00 00 00       	mov    $0x1d,%edx
++ 4e9:	eb 05                	jmp    4f0 <main+0x291>
++ 4eb:	e8 fc ff ff ff       	call   4ec <main+0x28d>
++ 4f0:	89 d0                	mov    %edx,%eax
++ 4f2:	cd 80                	int    $0x80
++ 4f4:	eb fa                	jmp    4f0 <main+0x291>
+diff -uNr linux-0.11/kernel/asm.s linux-0.11-deb/kernel/asm.s
+--- linux-0.11/kernel/asm.s	2013-11-22 23:20:48.623288899 +0800
++++ linux-0.11-deb/kernel/asm.s	2013-11-27 22:47:43.738091490 +0800
+@@ -11,13 +11,13 @@
+  * the fpu must be properly saved/resored. This hasn't been tested.
+  */
+ 
+-.globl _divide_error,_debug,_nmi,_int3,_overflow,_bounds,_invalid_op
+-.globl _double_fault,_coprocessor_segment_overrun
+-.globl _invalid_TSS,_segment_not_present,_stack_segment
+-.globl _general_protection,_coprocessor_error,_irq13,_reserved
++.globl divide_error,debug,nmi,int3,overflow,bounds,invalid_op
++.globl double_fault,coprocessor_segment_overrun
++.globl invalid_TSS,segment_not_present,stack_segment
++.globl general_protection,coprocessor_error,irq13,reserved
+ 
+-_divide_error:
+-	pushl $_do_divide_error
++divide_error:
++	pushl $do_divide_error
+ no_error_code:
+ 	xchgl %eax,(%esp)
+ 	pushl %ebx
+@@ -50,39 +50,39 @@
+ 	popl %eax
+ 	iret
+ 
+-_debug:
+-	pushl $_do_int3		# _do_debug
++debug:
++	pushl $do_int3		# do_debug
+ 	jmp no_error_code
+ 
+-_nmi:
+-	pushl $_do_nmi
++nmi:
++	pushl $do_nmi
+ 	jmp no_error_code
+ 
+-_int3:
+-	pushl $_do_int3
++int3:
++	pushl $do_int3
+ 	jmp no_error_code
+ 
+-_overflow:
+-	pushl $_do_overflow
++overflow:
++	pushl $do_overflow
+ 	jmp no_error_code
+ 
+-_bounds:
+-	pushl $_do_bounds
++bounds:
++	pushl $do_bounds
+ 	jmp no_error_code
+ 
+-_invalid_op:
+-	pushl $_do_invalid_op
++invalid_op:
++	pushl $do_invalid_op
+ 	jmp no_error_code
+ 
+-_coprocessor_segment_overrun:
+-	pushl $_do_coprocessor_segment_overrun
++coprocessor_segment_overrun:
++	pushl $do_coprocessor_segment_overrun
+ 	jmp no_error_code
+ 
+-_reserved:
+-	pushl $_do_reserved
++reserved:
++	pushl $do_reserved
+ 	jmp no_error_code
+ 
+-_irq13:
++irq13:
+ 	pushl %eax
+ 	xorb %al,%al
+ 	outb %al,$0xF0
+@@ -92,10 +92,10 @@
+ 1:	jmp 1f
+ 1:	outb %al,$0xA0
+ 	popl %eax
+-	jmp _coprocessor_error
++	jmp coprocessor_error
+ 
+-_double_fault:
+-	pushl $_do_double_fault
++double_fault:
++	pushl $do_double_fault
+ error_code:
+ 	xchgl %eax,4(%esp)		# error code <-> %eax
+ 	xchgl %ebx,(%esp)		# &function <-> %ebx
+@@ -128,19 +128,19 @@
+ 	popl %eax
+ 	iret
+ 
+-_invalid_TSS:
+-	pushl $_do_invalid_TSS
++invalid_TSS:
++	pushl $do_invalid_TSS
+ 	jmp error_code
+ 
+-_segment_not_present:
+-	pushl $_do_segment_not_present
++segment_not_present:
++	pushl $do_segment_not_present
+ 	jmp error_code
+ 
+-_stack_segment:
+-	pushl $_do_stack_segment
++stack_segment:
++	pushl $do_stack_segment
+ 	jmp error_code
+ 
+-_general_protection:
+-	pushl $_do_general_protection
++general_protection:
++	pushl $do_general_protection
+ 	jmp error_code
+ 
+diff -uNr linux-0.11/kernel/blk_drv/blk.h linux-0.11-deb/kernel/blk_drv/blk.h
+--- linux-0.11/kernel/blk_drv/blk.h	2013-11-22 23:20:48.627288897 +0800
++++ linux-0.11-deb/kernel/blk_drv/blk.h	2013-11-27 22:47:44.062091277 +0800
+@@ -84,7 +84,7 @@
+ #define DEVICE_ON(device)
+ #define DEVICE_OFF(device)
+ 
+-#elif
++#else
+ /* unknown blk device */
+ #error "unknown blk device"
+ 
+diff -uNr linux-0.11/kernel/blk_drv/floppy.c linux-0.11-deb/kernel/blk_drv/floppy.c
+--- linux-0.11/kernel/blk_drv/floppy.c	2013-11-22 23:20:48.627288897 +0800
++++ linux-0.11-deb/kernel/blk_drv/floppy.c	2013-11-27 22:47:44.014091303 +0800
+@@ -154,8 +154,7 @@
+ 
+ #define copy_buffer(from,to) \
+ __asm__("cld ; rep ; movsl" \
+-	::"c" (BLOCK_SIZE/4),"S" ((long)(from)),"D" ((long)(to)) \
+-	:"cx","di","si")
++	::"c" (BLOCK_SIZE/4),"S" ((long)(from)),"D" ((long)(to)))
+ 
+ static void setup_DMA(void)
+ {
+diff -uNr linux-0.11/kernel/blk_drv/hd.c linux-0.11-deb/kernel/blk_drv/hd.c
+--- linux-0.11/kernel/blk_drv/hd.c	2013-11-22 23:20:48.627288897 +0800
++++ linux-0.11-deb/kernel/blk_drv/hd.c	2013-11-27 22:47:43.990091323 +0800
+@@ -59,10 +59,10 @@
+ } hd[5*MAX_HD]={{0,0},};
+ 
+ #define port_read(port,buf,nr) \
+-__asm__("cld;rep;insw"::"d" (port),"D" (buf),"c" (nr):"cx","di")
++__asm__("cld;rep;insw"::"d" (port),"D" (buf),"c" (nr))
+ 
+ #define port_write(port,buf,nr) \
+-__asm__("cld;rep;outsw"::"d" (port),"S" (buf),"c" (nr):"cx","si")
++__asm__("cld;rep;outsw"::"d" (port),"S" (buf),"c" (nr))
+ 
+ extern void hd_interrupt(void);
+ extern void rd_load(void);
+diff -uNr linux-0.11/kernel/blk_drv/Makefile linux-0.11-deb/kernel/blk_drv/Makefile
+--- linux-0.11/kernel/blk_drv/Makefile	2013-11-22 23:20:48.627288897 +0800
++++ linux-0.11-deb/kernel/blk_drv/Makefile	2013-11-27 22:47:43.942091359 +0800
+@@ -6,13 +6,13 @@
+ # unless it's something special (ie not a .c file).
+ #
+ 
+-AR	=gar
+-AS	=gas
+-LD	=gld
+-LDFLAGS	=-s -x
++AR	=ar
++AS	=as --32
++LD	=ld -m elf_i386
++LDFLAGS	=-x
+ CC	=gcc
+-CFLAGS	=-Wall -O -fstrength-reduce -fomit-frame-pointer -fcombine-regs \
+-	-finline-functions -mstring-insns -nostdinc -I../../include
++CFLAGS	=-m32 -Wall -O -g -fstrength-reduce -fomit-frame-pointer  \
++	-finline-functions  -nostdinc -I../../include -mtune=i386
+ CPP	=gcc -E -nostdinc -I../../include
+ 
+ .c.s:
+diff -uNr linux-0.11/kernel/chr_drv/console.c linux-0.11-deb/kernel/chr_drv/console.c
+--- linux-0.11/kernel/chr_drv/console.c	2013-11-22 23:20:48.627288897 +0800
++++ linux-0.11-deb/kernel/chr_drv/console.c	2013-11-27 22:47:44.082091262 +0800
+@@ -116,14 +116,14 @@
+ 				__asm__("cld\n\t"
+ 					"rep\n\t"
+ 					"movsl\n\t"
+-					"movl _video_num_columns,%1\n\t"
++					"movl video_num_columns,%1\n\t"
+ 					"rep\n\t"
+ 					"stosw"
+ 					::"a" (video_erase_char),
+ 					"c" ((video_num_lines-1)*video_num_columns>>1),
+ 					"D" (video_mem_start),
+-					"S" (origin)
+-					:"cx","di","si");
++					"S" (origin));
++					
+ 				scr_end -= origin-video_mem_start;
+ 				pos -= origin-video_mem_start;
+ 				origin = video_mem_start;
+@@ -133,22 +133,22 @@
+ 					"stosw"
+ 					::"a" (video_erase_char),
+ 					"c" (video_num_columns),
+-					"D" (scr_end-video_size_row)
+-					:"cx","di");
++					"D" (scr_end-video_size_row));
++
+ 			}
+ 			set_origin();
+ 		} else {
+ 			__asm__("cld\n\t"
+ 				"rep\n\t"
+ 				"movsl\n\t"
+-				"movl _video_num_columns,%%ecx\n\t"
++				"movl video_num_columns,%%ecx\n\t"
+ 				"rep\n\t"
+ 				"stosw"
+ 				::"a" (video_erase_char),
+ 				"c" ((bottom-top-1)*video_num_columns>>1),
+ 				"D" (origin+video_size_row*top),
+-				"S" (origin+video_size_row*(top+1))
+-				:"cx","di","si");
++				"S" (origin+video_size_row*(top+1)));
++
+ 		}
+ 	}
+ 	else		/* Not EGA/VGA */
+@@ -156,14 +156,14 @@
+ 		__asm__("cld\n\t"
+ 			"rep\n\t"
+ 			"movsl\n\t"
+-			"movl _video_num_columns,%%ecx\n\t"
++			"movl video_num_columns,%%ecx\n\t"
+ 			"rep\n\t"
+ 			"stosw"
+ 			::"a" (video_erase_char),
+ 			"c" ((bottom-top-1)*video_num_columns>>1),
+ 			"D" (origin+video_size_row*top),
+-			"S" (origin+video_size_row*(top+1))
+-			:"cx","di","si");
++			"S" (origin+video_size_row*(top+1)));
++
+ 	}
+ }
+ 
+@@ -175,14 +175,15 @@
+ 			"rep\n\t"
+ 			"movsl\n\t"
+ 			"addl $2,%%edi\n\t"	/* %edi has been decremented by 4 */
+-			"movl _video_num_columns,%%ecx\n\t"
++			"movl video_num_columns,%%ecx\n\t"
+ 			"rep\n\t"
+-			"stosw"
++			"stosw\n\t"
++			"cld"
+ 			::"a" (video_erase_char),
+ 			"c" ((bottom-top-1)*video_num_columns>>1),
+ 			"D" (origin+video_size_row*bottom-4),
+-			"S" (origin+video_size_row*(bottom-1)-4)
+-			:"ax","cx","di","si");
++			"S" (origin+video_size_row*(bottom-1)-4));
++
+ 	}
+ 	else		/* Not EGA/VGA */
+ 	{
+@@ -190,14 +191,15 @@
+ 			"rep\n\t"
+ 			"movsl\n\t"
+ 			"addl $2,%%edi\n\t"	/* %edi has been decremented by 4 */
+-			"movl _video_num_columns,%%ecx\n\t"
++			"movl video_num_columns,%%ecx\n\t"
+ 			"rep\n\t"
+-			"stosw"
++			"stosw\n\t"
++			"cld"
+ 			::"a" (video_erase_char),
+ 			"c" ((bottom-top-1)*video_num_columns>>1),
+ 			"D" (origin+video_size_row*bottom-4),
+-			"S" (origin+video_size_row*(bottom-1)-4)
+-			:"ax","cx","di","si");
++			"S" (origin+video_size_row*(bottom-1)-4));
++
+ 	}
+ }
+ 
+@@ -261,8 +263,8 @@
+ 		"rep\n\t"
+ 		"stosw\n\t"
+ 		::"c" (count),
+-		"D" (start),"a" (video_erase_char)
+-		:"cx","di");
++		"D" (start),"a" (video_erase_char));
++		
+ }
+ 
+ static void csi_K(int par)
+@@ -292,8 +294,8 @@
+ 		"rep\n\t"
+ 		"stosw\n\t"
+ 		::"c" (count),
+-		"D" (start),"a" (video_erase_char)
+-		:"cx","di");
++		"D" (start),"a" (video_erase_char));
++		
+ }
+ 
+ void csi_m(void)
+@@ -458,10 +460,10 @@
+ 						pos -= video_size_row;
+ 						lf();
+ 					}
+-					__asm__("movb _attr,%%ah\n\t"
++					__asm__("movb attr,%%ah\n\t"
+ 						"movw %%ax,%1\n\t"
+-						::"a" (c),"m" (*(short *)pos)
+-						:"ax");
++						::"a" (c),"m" (*(short *)pos));
++						
+ 					pos += 2;
+ 					x++;
+ 				} else if (c==27)
+diff -uNr linux-0.11/kernel/chr_drv/keyboard.S linux-0.11-deb/kernel/chr_drv/keyboard.S
+--- linux-0.11/kernel/chr_drv/keyboard.S	2013-11-22 23:20:48.627288897 +0800
++++ linux-0.11-deb/kernel/chr_drv/keyboard.S	2013-11-27 22:47:44.098091257 +0800
+@@ -13,7 +13,7 @@
+ #include <linux/config.h>
+ 
+ .text
+-.globl _keyboard_interrupt
++.globl keyboard_interrupt
+ 
+ /*
+  * these are for the keyboard read functions
+@@ -34,7 +34,7 @@
+  *  keyboard scan-code and converts it into the appropriate
+  *  ascii character(s).
+  */
+-_keyboard_interrupt:
++keyboard_interrupt:
+ 	pushl %eax
+ 	pushl %ebx
+ 	pushl %ecx
+@@ -44,7 +44,7 @@
+ 	movl $0x10,%eax
+ 	mov %ax,%ds
+ 	mov %ax,%es
+-	xorl %al,%al		/* %eax is scan code */
++	xor %al,%al		/* %eax is scan code */
+ 	inb $0x60,%al
+ 	cmpb $0xe0,%al
+ 	je set_e0
+@@ -66,7 +66,7 @@
+ 	movb $0x20,%al
+ 	outb %al,$0x20
+ 	pushl $0
+-	call _do_tty_interrupt
++	call do_tty_interrupt
+ 	addl $4,%esp
+ 	pop %es
+ 	pop %ds
+@@ -88,7 +88,7 @@
+ put_queue:
+ 	pushl %ecx
+ 	pushl %edx
+-	movl _table_list,%edx		# read-queue for console
++	movl table_list,%edx		# read-queue for console
+ 	movl head(%edx),%ecx
+ 1:	movb %al,buf(%edx,%ecx)
+ 	incl %ecx
+@@ -211,7 +211,7 @@
+ 	pushl %eax
+ 	pushl %ecx
+ 	pushl %edx
+-	call _show_stat
++	call show_stat
+ 	popl %edx
+ 	popl %ecx
+ 	popl %eax
+diff -uNr linux-0.11/kernel/chr_drv/Makefile linux-0.11-deb/kernel/chr_drv/Makefile
+--- linux-0.11/kernel/chr_drv/Makefile	2013-11-22 23:20:48.627288897 +0800
++++ linux-0.11-deb/kernel/chr_drv/Makefile	2013-11-27 22:47:44.086091263 +0800
+@@ -6,13 +6,13 @@
+ # unless it's something special (ie not a .c file).
+ #
+ 
+-AR	=gar
+-AS	=gas
+-LD	=gld
+-LDFLAGS	=-s -x
++AR	=ar
++AS	=as --32
++LD	=ld -m elf_i386
++LDFLAGS	=-x
+ CC	=gcc
+-CFLAGS	=-Wall -O -fstrength-reduce -fomit-frame-pointer -fcombine-regs \
+-	-finline-functions -mstring-insns -nostdinc -I../../include
++CFLAGS	=-m32 -Wall -O -g -fstrength-reduce -fomit-frame-pointer  \
++	-finline-functions  -nostdinc -I../../include -mtune=i386
+ CPP	=gcc -E -nostdinc -I../../include
+ 
+ .c.s:
+diff -uNr linux-0.11/kernel/chr_drv/rs_io.s linux-0.11-deb/kernel/chr_drv/rs_io.s
+--- linux-0.11/kernel/chr_drv/rs_io.s	2013-11-22 23:20:48.627288897 +0800
++++ linux-0.11-deb/kernel/chr_drv/rs_io.s	2013-11-27 22:47:44.142091234 +0800
+@@ -11,7 +11,7 @@
+  */
+ 
+ .text
+-.globl _rs1_interrupt,_rs2_interrupt
++.globl rs1_interrupt, rs2_interrupt
+ 
+ size	= 1024				/* must be power of two !
+ 					   and must match the value
+@@ -30,13 +30,13 @@
+  * These are the actual interrupt routines. They look where
+  * the interrupt is coming from, and take appropriate action.
+  */
+-.align 2
+-_rs1_interrupt:
+-	pushl $_table_list+8
++.align 4
++rs1_interrupt:
++	pushl $table_list+8
+ 	jmp rs_int
+-.align 2
+-_rs2_interrupt:
+-	pushl $_table_list+16
++.align 4
++rs2_interrupt:
++	pushl $table_list+16
+ rs_int:
+ 	pushl %edx
+ 	pushl %ecx
+@@ -79,23 +79,23 @@
+ jmp_table:
+ 	.long modem_status,write_char,read_char,line_status
+ 
+-.align 2
++.align 4
+ modem_status:
+ 	addl $6,%edx		/* clear intr by reading modem status reg */
+ 	inb %dx,%al
+ 	ret
+ 
+-.align 2
++.align 4
+ line_status:
+ 	addl $5,%edx		/* clear intr by reading line status reg. */
+ 	inb %dx,%al
+ 	ret
+ 
+-.align 2
++.align 4
+ read_char:
+ 	inb %dx,%al
+ 	movl %ecx,%edx
+-	subl $_table_list,%edx
++	subl $table_list,%edx
+ 	shrl $3,%edx
+ 	movl (%ecx),%ecx		# read-queue
+ 	movl head(%ecx),%ebx
+@@ -106,11 +106,11 @@
+ 	je 1f
+ 	movl %ebx,head(%ecx)
+ 1:	pushl %edx
+-	call _do_tty_interrupt
++	call do_tty_interrupt
+ 	addl $4,%esp
+ 	ret
+ 
+-.align 2
++.align 4
+ write_char:
+ 	movl 4(%ecx),%ecx		# write-queue
+ 	movl head(%ecx),%ebx
+@@ -132,7 +132,7 @@
+ 	cmpl head(%ecx),%ebx
+ 	je write_buffer_empty
+ 	ret
+-.align 2
++.align 4
+ write_buffer_empty:
+ 	movl proc_list(%ecx),%ebx	# wake up sleeping process
+ 	testl %ebx,%ebx			# is there any?
+diff -uNr linux-0.11/kernel/Makefile linux-0.11-deb/kernel/Makefile
+--- linux-0.11/kernel/Makefile	2013-11-22 23:20:48.627288897 +0800
++++ linux-0.11-deb/kernel/Makefile	2013-11-27 22:47:43.738091490 +0800
+@@ -6,13 +6,13 @@
+ # unless it's something special (ie not a .c file).
+ #
+ 
+-AR	=gar
+-AS	=gas
+-LD	=gld
+-LDFLAGS	=-s -x
++AR	=ar
++AS	=as --32
++LD	=ld -m elf_i386
++LDFLAGS	=-x
+ CC	=gcc
+-CFLAGS	=-Wall -O -fstrength-reduce -fomit-frame-pointer -fcombine-regs \
+-	-finline-functions -mstring-insns -nostdinc -I../include
++CFLAGS	=-m32 -Wall -O -g -fstrength-reduce -fomit-frame-pointer  \
++	-finline-functions  -nostdinc -I../include -mtune=i386
+ CPP	=gcc -E -nostdinc -I../include
+ 
+ .c.s:
+diff -uNr linux-0.11/kernel/math/Makefile linux-0.11-deb/kernel/math/Makefile
+--- linux-0.11/kernel/math/Makefile	2013-11-22 23:20:48.627288897 +0800
++++ linux-0.11-deb/kernel/math/Makefile	2013-11-27 22:47:43.770091471 +0800
+@@ -6,13 +6,13 @@
+ # unless it's something special (ie not a .c file).
+ #
+ 
+-AR	=gar
+-AS	=gas
+-LD	=gld
+-LDFLAGS	=-s -x
++AR	=ar
++AS	=as --32
++LD	=ld -m elf_i386
++LDFLAGS	=-x
+ CC	=gcc
+-CFLAGS	=-Wall -O -fstrength-reduce -fomit-frame-pointer -fcombine-regs \
+-	-finline-functions -mstring-insns -nostdinc -I../../include
++CFLAGS	=-m32 -Wall -O -g -fstrength-reduce -fomit-frame-pointer  \
++	-finline-functions  -nostdinc -I../../include -mtune=i386
+ CPP	=gcc -E -nostdinc -I../../include
+ 
+ .c.s:
+diff -uNr linux-0.11/kernel/printk.c linux-0.11-deb/kernel/printk.c
+--- linux-0.11/kernel/printk.c	2013-11-22 23:20:48.627288897 +0800
++++ linux-0.11-deb/kernel/printk.c	2013-11-27 22:47:43.898091387 +0800
+@@ -30,9 +30,9 @@
+ 		"push %%ds\n\t"
+ 		"pop %%fs\n\t"
+ 		"pushl %0\n\t"
+-		"pushl $_buf\n\t"
++		"pushl $buf\n\t"
+ 		"pushl $0\n\t"
+-		"call _tty_write\n\t"
++		"call tty_write\n\t"
+ 		"addl $8,%%esp\n\t"
+ 		"popl %0\n\t"
+ 		"pop %%fs"
+diff -uNr linux-0.11/kernel/system_call.s linux-0.11-deb/kernel/system_call.s
+--- linux-0.11/kernel/system_call.s	2013-11-22 23:20:48.627288897 +0800
++++ linux-0.11-deb/kernel/system_call.s	2013-11-27 22:47:43.850091421 +0800
+@@ -64,20 +64,20 @@
+  * Ok, I get parallel printer interrupts while using the floppy for some
+  * strange reason. Urgel. Now I just ignore them.
+  */
+-.globl _system_call,_sys_fork,_timer_interrupt,_sys_execve
+-.globl _hd_interrupt,_floppy_interrupt,_parallel_interrupt
+-.globl _device_not_available, _coprocessor_error
++.globl system_call, sys_fork, timer_interrupt, sys_execve
++.globl hd_interrupt, floppy_interrupt, parallel_interrupt
++.globl device_not_available, coprocessor_error
+ 
+-.align 2
++.align 4
+ bad_sys_call:
+ 	movl $-1,%eax
+ 	iret
+-.align 2
++.align 4
+ reschedule:
+ 	pushl $ret_from_sys_call
+-	jmp _schedule
+-.align 2
+-_system_call:
++	jmp schedule
++.align 4
++system_call:
+ 	cmpl $nr_system_calls-1,%eax
+ 	ja bad_sys_call
+ 	push %ds
+@@ -91,16 +91,16 @@
+ 	mov %dx,%es
+ 	movl $0x17,%edx		# fs points to local data space
+ 	mov %dx,%fs
+-	call _sys_call_table(,%eax,4)
++	call sys_call_table(,%eax,4)
+ 	pushl %eax
+-	movl _current,%eax
++	movl current,%eax
+ 	cmpl $0,state(%eax)		# state
+ 	jne reschedule
+ 	cmpl $0,counter(%eax)		# counter
+ 	je reschedule
+ ret_from_sys_call:
+-	movl _current,%eax		# task[0] cannot have signals
+-	cmpl _task,%eax
++	movl current,%eax		# task[0] cannot have signals
++	cmpl task,%eax
+ 	je 3f
+ 	cmpw $0x0f,CS(%esp)		# was old code segment supervisor ?
+ 	jne 3f
+@@ -116,7 +116,7 @@
+ 	movl %ebx,signal(%eax)
+ 	incl %ecx
+ 	pushl %ecx
+-	call _do_signal
++	call do_signal
+ 	popl %eax
+ 3:	popl %eax
+ 	popl %ebx
+@@ -127,8 +127,8 @@
+ 	pop %ds
+ 	iret
+ 
+-.align 2
+-_coprocessor_error:
++.align 4
++coprocessor_error:
+ 	push %ds
+ 	push %es
+ 	push %fs
+@@ -142,10 +142,10 @@
+ 	movl $0x17,%eax
+ 	mov %ax,%fs
+ 	pushl $ret_from_sys_call
+-	jmp _math_error
++	jmp math_error
+ 
+-.align 2
+-_device_not_available:
++.align 4
++device_not_available:
+ 	push %ds
+ 	push %es
+ 	push %fs
+@@ -162,20 +162,20 @@
+ 	clts				# clear TS so that we can use math
+ 	movl %cr0,%eax
+ 	testl $0x4,%eax			# EM (math emulation bit)
+-	je _math_state_restore
++	je math_state_restore
+ 	pushl %ebp
+ 	pushl %esi
+ 	pushl %edi
+-	call _math_emulate
++	call math_emulate
+ 	popl %edi
+ 	popl %esi
+ 	popl %ebp
+ 	ret
+ 
+-.align 2
+-_timer_interrupt:
++.align 4
++timer_interrupt:
+ 	push %ds		# save ds,es and put kernel data space
+-	push %es		# into them. %fs is used by _system_call
++	push %es		# into them. %fs is used by system_call
+ 	push %fs
+ 	pushl %edx		# we save %eax,%ecx,%edx as gcc doesn't
+ 	pushl %ecx		# save those across function calls. %ebx
+@@ -186,27 +186,27 @@
+ 	mov %ax,%es
+ 	movl $0x17,%eax
+ 	mov %ax,%fs
+-	incl _jiffies
++	incl jiffies
+ 	movb $0x20,%al		# EOI to interrupt controller #1
+ 	outb %al,$0x20
+ 	movl CS(%esp),%eax
+ 	andl $3,%eax		# %eax is CPL (0 or 3, 0=supervisor)
+ 	pushl %eax
+-	call _do_timer		# 'do_timer(long CPL)' does everything from
++	call do_timer		# 'do_timer(long CPL)' does everything from
+ 	addl $4,%esp		# task switching to accounting ...
+ 	jmp ret_from_sys_call
+ 
+-.align 2
+-_sys_execve:
++.align 4
++sys_execve:
+ 	lea EIP(%esp),%eax
+ 	pushl %eax
+-	call _do_execve
++	call do_execve
+ 	addl $4,%esp
+ 	ret
+ 
+-.align 2
+-_sys_fork:
+-	call _find_empty_process
++.align 4
++sys_fork:
++	call find_empty_process
+ 	testl %eax,%eax
+ 	js 1f
+ 	push %gs
+@@ -214,11 +214,11 @@
+ 	pushl %edi
+ 	pushl %ebp
+ 	pushl %eax
+-	call _copy_process
++	call copy_process
+ 	addl $20,%esp
+ 1:	ret
+ 
+-_hd_interrupt:
++hd_interrupt:
+ 	pushl %eax
+ 	pushl %ecx
+ 	pushl %edx
+@@ -235,10 +235,10 @@
+ 	jmp 1f			# give port chance to breathe
+ 1:	jmp 1f
+ 1:	xorl %edx,%edx
+-	xchgl _do_hd,%edx
++	xchgl do_hd,%edx
+ 	testl %edx,%edx
+ 	jne 1f
+-	movl $_unexpected_hd_interrupt,%edx
++	movl $unexpected_hd_interrupt,%edx
+ 1:	outb %al,$0x20
+ 	call *%edx		# "interesting" way of handling intr.
+ 	pop %fs
+@@ -249,7 +249,7 @@
+ 	popl %eax
+ 	iret
+ 
+-_floppy_interrupt:
++floppy_interrupt:
+ 	pushl %eax
+ 	pushl %ecx
+ 	pushl %edx
+@@ -264,10 +264,10 @@
+ 	movb $0x20,%al
+ 	outb %al,$0x20		# EOI to interrupt controller #1
+ 	xorl %eax,%eax
+-	xchgl _do_floppy,%eax
++	xchgl do_floppy,%eax
+ 	testl %eax,%eax
+ 	jne 1f
+-	movl $_unexpected_floppy_interrupt,%eax
++	movl $unexpected_floppy_interrupt,%eax
+ 1:	call *%eax		# "interesting" way of handling intr.
+ 	pop %fs
+ 	pop %es
+@@ -277,7 +277,7 @@
+ 	popl %eax
+ 	iret
+ 
+-_parallel_interrupt:
++parallel_interrupt:
+ 	pushl %eax
+ 	movb $0x20,%al
+ 	outb %al,$0x20
+diff -uNr linux-0.11/lib/Makefile linux-0.11-deb/lib/Makefile
+--- linux-0.11/lib/Makefile	2013-11-22 23:20:48.631288901 +0800
++++ linux-0.11-deb/lib/Makefile	2013-11-27 22:47:44.254091150 +0800
+@@ -6,13 +6,13 @@
+ # unless it's something special (ie not a .c file).
+ #
+ 
+-AR	=gar
+-AS	=gas
+-LD	=gld
+-LDFLAGS	=-s -x
++AR	=ar
++AS	=as --32
++LD	=ld -m elf_i386
++LDFLAGS	=-x
+ CC	=gcc
+-CFLAGS	=-Wall -O -fstrength-reduce -fomit-frame-pointer -fcombine-regs \
+-	-finline-functions -mstring-insns -nostdinc -I../include
++CFLAGS	=-m32 -Wall -O -g -fstrength-reduce -fomit-frame-pointer  \
++	-finline-functions  -nostdinc -I../include -mtune=i386
+ CPP	=gcc -E -nostdinc -I../include
+ 
+ .c.s:
+diff -uNr linux-0.11/lib/malloc.c linux-0.11-deb/lib/malloc.c
+--- linux-0.11/lib/malloc.c	2013-11-22 23:20:48.631288901 +0800
++++ linux-0.11-deb/lib/malloc.c	2013-11-27 22:47:44.302091116 +0800
+@@ -153,7 +153,8 @@
+ 		free_bucket_desc = bdesc->next;
+ 		bdesc->refcnt = 0;
+ 		bdesc->bucket_size = bdir->size;
+-		bdesc->page = bdesc->freeptr = (void *) cp = get_free_page();
++		cp = (char*)get_free_page();
++		bdesc->page = bdesc->freeptr = (void *) cp;
+ 		if (!cp)
+ 			panic("Out of memory in kernel malloc()");
+ 		/* Set up the chain of free objects */
+diff -uNr linux-0.11/Makefile linux-0.11-deb/Makefile
+--- linux-0.11/Makefile	2013-11-22 23:20:48.631288901 +0800
++++ linux-0.11-deb/Makefile	2013-11-27 22:47:43.614091582 +0800
+@@ -2,17 +2,17 @@
+ # if you want the ram-disk device, define this to be the
+ # size in blocks.
+ #
+-RAMDISK = #-DRAMDISK=512
++RAMDISK = -DRAMDISK=512
+ 
+ AS86	=as86 -0 -a
+ LD86	=ld86 -0
+ 
+-AS	=gas
+-LD	=gld
+-LDFLAGS	=-s -x -M
++AS	=as --32
++LD	=ld -m elf_i386 -Ttext 0 -e startup_32
++LDFLAGS	= -x -M
+ CC	=gcc $(RAMDISK)
+-CFLAGS	=-Wall -O -fstrength-reduce -fomit-frame-pointer \
+--fcombine-regs -mstring-insns
++CFLAGS	=-m32 -Wall -O -g -fstrength-reduce -fomit-frame-pointer -mtune=i386 
++ 
+ CPP	=cpp -nostdinc -Iinclude
+ 
+ #
+@@ -20,7 +20,7 @@
+ # This can be either FLOPPY, /dev/xxxx or empty, in which case the
+ # default of /dev/hd6 is used by 'build'.
+ #
+-ROOT_DEV=/dev/hd6
++ROOT_DEV=FLOPPY
+ 
+ ARCHIVES=kernel/kernel.o mm/mm.o fs/fs.o
+ DRIVERS =kernel/blk_drv/blk_drv.a kernel/chr_drv/chr_drv.a
+@@ -31,7 +31,7 @@
+ 	$(CC) $(CFLAGS) \
+ 	-nostdinc -Iinclude -S -o $*.s $<
+ .s.o:
+-	$(AS) -c -o $*.o $<
++	$(AS) -o $*.o $<
+ .c.o:
+ 	$(CC) $(CFLAGS) \
+ 	-nostdinc -Iinclude -c -o $*.o $<
+@@ -43,7 +43,8 @@
+ 	sync
+ 
+ disk: Image
+-	dd bs=8192 if=Image of=/dev/PS0
++	dd if=Image of=bootimage-fda.img
++	dd bs=1024 if=/dev/zero of=bootimage-fda.img seek=256 count=1184
+ 
+ tools/build: tools/build.c
+ 	$(CC) $(CFLAGS) \
+@@ -59,6 +60,9 @@
+ 	$(MATH) \
+ 	$(LIBS) \
+ 	-o tools/system > System.map
++	objcopy --only-keep-debug tools/system tools/system.dbg
++	objcopy --add-gnu-debuglink=tools/system.dbg tools/system
++	objcopy -g tools/system
+ 
+ kernel/math/math.a:
+ 	(cd kernel/math; make)
+@@ -120,4 +124,4 @@
+   include/utime.h include/time.h include/linux/tty.h include/termios.h \
+   include/linux/sched.h include/linux/head.h include/linux/fs.h \
+   include/linux/mm.h include/signal.h include/asm/system.h include/asm/io.h \
+-  include/stddef.h include/stdarg.h include/fcntl.h 
++  include/stddef.h include/stdarg.h include/fcntl.h include/check_data32.h
+diff -uNr linux-0.11/mm/Makefile linux-0.11-deb/mm/Makefile
+--- linux-0.11/mm/Makefile	2013-11-22 23:20:48.631288901 +0800
++++ linux-0.11-deb/mm/Makefile	2013-11-27 22:47:44.482091003 +0800
+@@ -1,9 +1,9 @@
+ CC	=gcc
+-CFLAGS	=-O -Wall -fstrength-reduce -fcombine-regs -fomit-frame-pointer \
+-	-finline-functions -nostdinc -I../include
+-AS	=gas
+-AR	=gar
+-LD	=gld
++CFLAGS	=-O -g -Wall -fstrength-reduce  -fomit-frame-pointer \
++	-finline-functions -nostdinc -I../include -mtune=i386 -m32
++AS	=as --32
++AR	=ar
++LD	=ld -m elf_i386
+ CPP	=gcc -E -nostdinc -I../include
+ 
+ .c.o:
+diff -uNr linux-0.11/mm/memory.c linux-0.11-deb/mm/memory.c
+--- linux-0.11/mm/memory.c	2013-11-22 23:20:48.631288901 +0800
++++ linux-0.11-deb/mm/memory.c	2013-11-27 22:47:44.498090991 +0800
+@@ -52,7 +52,7 @@
+ static long HIGH_MEMORY = 0;
+ 
+ #define copy_page(from,to) \
+-__asm__("cld ; rep ; movsl"::"S" (from),"D" (to),"c" (1024):"cx","di","si")
++__asm__("cld ; rep ; movsl"::"S" (from),"D" (to),"c" (1024))
+ 
+ static unsigned char mem_map [ PAGING_PAGES ] = {0,};
+ 
+@@ -74,11 +74,12 @@
+ 	"leal 4092(%%edx),%%edi\n\t"
+ 	"rep ; stosl\n\t"
+ 	"movl %%edx,%%eax\n"
+-	"1:"
++	"1:\n\t"
++	"cld"
+ 	:"=a" (__res)
+ 	:"0" (0),"i" (LOW_MEM),"c" (PAGING_PAGES),
+ 	"D" (mem_map+PAGING_PAGES-1)
+-	:"di","cx","dx");
++	:"dx");
+ return __res;
+ }
+ 
+diff -uNr linux-0.11/mm/page.s linux-0.11-deb/mm/page.s
+--- linux-0.11/mm/page.s	2013-11-22 23:20:48.631288901 +0800
++++ linux-0.11-deb/mm/page.s	2013-11-27 22:47:44.506090986 +0800
+@@ -9,9 +9,9 @@
+  * the real work is done in mm.c
+  */
+ 
+-.globl _page_fault
++.globl page_fault
+ 
+-_page_fault:
++page_fault:
+ 	xchgl %eax,(%esp)
+ 	pushl %ecx
+ 	pushl %edx
+@@ -27,9 +27,9 @@
+ 	pushl %eax
+ 	testl $1,%eax
+ 	jne 1f
+-	call _do_no_page
++	call do_no_page
+ 	jmp 2f
+-1:	call _do_wp_page
++1:	call do_wp_page
+ 2:	addl $8,%esp
+ 	pop %fs
+ 	pop %es
+diff -uNr linux-0.11/tools/build.c linux-0.11-deb/tools/build.c
+--- linux-0.11/tools/build.c	2013-11-22 23:20:48.631288901 +0800
++++ linux-0.11-deb/tools/build.c	2013-11-27 22:47:43.594091593 +0800
+@@ -37,6 +37,9 @@
+ #define DEFAULT_MAJOR_ROOT 3
+ #define DEFAULT_MINOR_ROOT 6
+ 
++#define MAJOR(a) (((unsigned)(a))>>8)
++#define MINOR(a) ((a)&0xff)
++
+ /* max nr of sectors of setup: don't change unless you also change
+  * bootsect etc */
+ #define SETUP_SECTS 4
+@@ -155,8 +158,14 @@
+ 		die("Unable to open 'system'");
+ 	if (read(id,buf,GCC_HEADER) != GCC_HEADER)
+ 		die("Unable to read header of 'system'");
+-	if (((long *) buf)[5] != 0)
++	if (((long *) buf)[6] != 0)
+ 		die("Non-GCC header of 'system'");
++
++/* The header size is 4*GCC_HEADER (4KB) on my machine*/
++	for (i=0; i<3; i++)
++		if (read(id,buf,GCC_HEADER) != GCC_HEADER)
++			die("Unable to read header of 'system'");
++
+ 	for (i=0 ; (c=read(id,buf,sizeof buf))>0 ; i+=c )
+ 		if (write(1,buf,c)!=c)
+ 			die("Write call failed");
