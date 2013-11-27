@@ -39,7 +39,7 @@ static inline _syscall0(int,sync)
 #include <sys/types.h>
 
 #include <linux/fs.h>
-
+// #include <check_data32.h>
 static char printbuf[1024];
 
 extern int vsprintf();
@@ -170,6 +170,7 @@ void init(void)
 {
 	int pid,i;
 
+	printk("entering init");
 	setup((void *) &drive_info);
 	(void) open("/dev/tty0",O_RDWR,0);
 	(void) dup(0);

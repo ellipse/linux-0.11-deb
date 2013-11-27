@@ -18,7 +18,7 @@ $ cd linux-0.11/
 $ patch -p1 < ../linux-0.11-deb64-1.0.patch
 ``` 
 
-##NOTE:
+## NOTE:
 
 1. The root device is "FLOPPY". You can change it in `./Makefile` by modifying the `ROOT_DEV`.
 
