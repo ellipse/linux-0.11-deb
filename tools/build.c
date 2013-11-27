@@ -160,6 +160,12 @@ int main(int argc, char ** argv)
 		die("Unable to read header of 'system'");
 	if (((long *) buf)[6] != 0)
 		die("Non-GCC header of 'system'");
+
+/* The header size is 4*GCC_HEADER (4KB) on my machine*/
+	for (i=0; i<3; i++)
+		if (read(id,buf,GCC_HEADER) != GCC_HEADER)
+			die("Unable to read header of 'system'");
+
 	for (i=0 ; (c=read(id,buf,sizeof buf))>0 ; i+=c )
 		if (write(1,buf,c)!=c)
 			die("Write call failed");
