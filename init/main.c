@@ -29,6 +29,7 @@ static inline _syscall0(int,sync)
 #include <linux/tty.h>
 #include <linux/sched.h>
 #include <linux/head.h>
+#include <linux/varfix.h>
 #include <asm/system.h>
 #include <asm/io.h>
 
@@ -125,6 +126,7 @@ void main(void)		/* This really IS void, no error here. */
 	main_memory_start += rd_init(main_memory_start, RAMDISK*1024);
 #endif
 	mem_init(main_memory_start,memory_end);
+	var_fix_init();
 	trap_init();
 	blk_dev_init();
 	chr_dev_init();
@@ -170,7 +172,6 @@ void init(void)
 {
 	int pid,i;
 
-	printk("entering init");
 	setup((void *) &drive_info);
 	(void) open("/dev/tty0",O_RDWR,0);
 	(void) dup(0);

@@ -210,6 +210,8 @@ setup_paging:
 1:	stosl			/* fill pages backwards - more efficient :-) */
 	subl $0x1000,%eax
 	jge 1b
+        cld
+        
 	xorl %eax,%eax		/* pg_dir is at 0x0000 */
 	movl %eax,%cr3		/* cr3 - page directory start */
 	movl %cr0,%eax

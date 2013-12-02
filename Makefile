@@ -9,7 +9,7 @@ LD86	=ld86 -0
 
 AS	=as --32
 LD	=ld -m elf_i386 -Ttext 0 -e startup_32
-LDFLAGS	= -x -M
+LDFLAGS	= -M -x
 CC	=gcc $(RAMDISK)
 CFLAGS	=-m32 -Wall -O -g -fstrength-reduce -fomit-frame-pointer -mtune=i386 
  
@@ -101,6 +101,7 @@ tmp.s:	boot/bootsect.s tools/system
 clean:
 	rm -f Image System.map tmp_make core boot/bootsect boot/setup
 	rm -f init/*.o tools/system tools/build boot/*.o
+	rm -f bootimage-fda.img
 	(cd mm;make clean)
 	(cd fs;make clean)
 	(cd kernel;make clean)
@@ -122,6 +123,6 @@ dep:
 init/main.o : init/main.c include/unistd.h include/sys/stat.h \
   include/sys/types.h include/sys/times.h include/sys/utsname.h \
   include/utime.h include/time.h include/linux/tty.h include/termios.h \
-  include/linux/sched.h include/linux/head.h include/linux/fs.h \
+  include/linux/sched.h include/linux/head.h include/linux/fs.h  include/linux/varfix.h\
   include/linux/mm.h include/signal.h include/asm/system.h include/asm/io.h \
-  include/stddef.h include/stdarg.h include/fcntl.h include/check_data32.h
+  include/stddef.h include/stdarg.h include/fcntl.h

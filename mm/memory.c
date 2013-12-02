@@ -62,7 +62,7 @@ static unsigned char mem_map [ PAGING_PAGES ] = {0,};
  */
 unsigned long get_free_page(void)
 {
-register unsigned long __res asm("ax");
+register unsigned long __res;
 
 __asm__("std ; repne ; scasb\n\t"
 	"jne 1f\n\t"

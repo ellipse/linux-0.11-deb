@@ -101,7 +101,7 @@ static void make_request(int major,int rw, struct buffer_head * bh)
 			rw = WRITE;
 	}
 	if (rw!=READ && rw!=WRITE)
-		panic("Bad block dev command, must be R/W/RA/WA");
+		panic("make_request: Bad block dev command, must be R/W/RA/WA");
 	lock_buffer(bh);
 	if ((rw == WRITE && !bh->b_dirt) || (rw == READ && bh->b_uptodate)) {
 		unlock_buffer(bh);

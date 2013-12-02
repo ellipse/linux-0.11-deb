@@ -137,12 +137,12 @@ int sys_setup(void * BIOS)
 		if (!(bh = bread(0x300 + drive*5,0))) {
 			printk("Unable to read partition table of drive %d\n\r",
 				drive);
-			panic("");
+			panic("sys_setup");
 		}
 		if (bh->b_data[510] != 0x55 || (unsigned char)
 		    bh->b_data[511] != 0xAA) {
 			printk("Bad partition table on drive %d\n\r",drive);
-			panic("");
+			panic("sys_setup");
 		}
 		p = 0x1BE + (void *)bh->b_data;
 		for (i=1;i<5;i++,p++) {
@@ -184,9 +184,9 @@ static void hd_out(unsigned int drive,unsigned int nsect,unsigned int sect,
 	register int port asm("dx");
 
 	if (drive>1 || head>15)
-		panic("Trying to write bad sector");
+		panic("hd_out: Trying to write bad sector");
 	if (!controller_ready())
-		panic("HD controller not ready");
+		panic("hd_out: HD controller not ready");
 	do_hd = intr_addr;
 	outb_p(hd_info[drive].ctl,HD_CMD);
 	port=HD_DATA;
@@ -337,7 +337,7 @@ void do_hd_request(void)
 	} else if (CURRENT->cmd == READ) {
 		hd_out(dev,nsect,sec,head,cyl,WIN_READ,&read_intr);
 	} else
-		panic("unknown hd-command");
+		panic("do_hd_request: unknown hd-command");
 }
 
 void hd_init(void)

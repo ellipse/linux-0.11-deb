@@ -41,7 +41,7 @@ void do_rd_request(void)
 			      addr,
 			      len);
 	} else
-		panic("unknown ramdisk-command");
+		panic("do_rd_request: unknown ramdisk-command");
 	end_request(1);
 	goto repeat;
 }

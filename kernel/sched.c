@@ -155,7 +155,7 @@ void sleep_on(struct task_struct **p)
 	if (!p)
 		return;
 	if (current == &(init_task.task))
-		panic("task[0] trying to sleep");
+		panic("sleep_on: task[0] trying to sleep");
 	tmp = *p;
 	*p = current;
 	current->state = TASK_UNINTERRUPTIBLE;
@@ -171,7 +171,7 @@ void interruptible_sleep_on(struct task_struct **p)
 	if (!p)
 		return;
 	if (current == &(init_task.task))
-		panic("task[0] trying to sleep");
+		panic("interruptible_sleep_on: task[0] trying to sleep");
 	tmp=*p;
 	*p=current;
 repeat:	current->state = TASK_INTERRUPTIBLE;
@@ -209,7 +209,7 @@ int ticks_to_floppy_on(unsigned int nr)
 	unsigned char mask = 0x10 << nr;
 
 	if (nr>3)
-		panic("floppy_on: nr>3");
+		panic("ticks_to_floppy_on: floppy_on: nr>3");
 	moff_timer[nr]=10000;		/* 100 s = very big :-) */
 	cli();				/* use floppy_off to turn it off */
 	mask |= current_DOR;
@@ -283,7 +283,7 @@ void add_timer(long jiffies, void (*fn)(void))
 			if (!p->fn)
 				break;
 		if (p >= timer_list + TIME_REQUESTS)
-			panic("No more time requests free");
+			panic("add_timer: No more time requests free");
 		p->fn = fn;
 		p->jiffies = jiffies;
 		p->next = next_timer;
@@ -388,7 +388,7 @@ void sched_init(void)
 	struct desc_struct * p;
 
 	if (sizeof(struct sigaction) != 16)
-		panic("Struct sigaction MUST be 16 bytes");
+		panic("sched_init: Struct sigaction MUST be 16 bytes");
 	set_tss_desc(gdt+FIRST_TSS_ENTRY,&(init_task.task.tss));
 	set_ldt_desc(gdt+FIRST_LDT_ENTRY,&(init_task.task.ldt));
 	p = gdt+2+FIRST_TSS_ENTRY;
@@ -409,4 +409,17 @@ void sched_init(void)
 	set_intr_gate(0x20,&timer_interrupt);
 	outb(inb_p(0x21)&~0x01,0x21);
 	set_system_gate(0x80,&system_call);
+		
+	/* 
+	 * all the static variable with global scope defined in sched.c
+	 * are initialized incorrectly. I don't know why :-(
+	 */
+	memset(timer_list, 0, sizeof(timer_list));
+	if (next_timer != NULL)
+		next_timer = NULL;
+
+	for (i=0; i<4; i++) {
+		wait_motor[i] = NULL;
+		mon_timer[i] = moff_timer[i] = 0;
+	}
 }

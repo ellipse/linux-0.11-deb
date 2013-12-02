@@ -46,9 +46,9 @@ int copy_mem(int nr,struct task_struct * p)
 	old_code_base = get_base(current->ldt[1]);
 	old_data_base = get_base(current->ldt[2]);
 	if (old_data_base != old_code_base)
-		panic("We don't support separate I&D");
+		panic("copy_mem: We don't support separate I&D");
 	if (data_limit < code_limit)
-		panic("Bad data_limit");
+		panic("copy_mem: Bad data_limit");
 	new_data_base = new_code_base = nr * 0x4000000;
 	p->start_code = new_code_base;
 	set_base(p->ldt[1],new_code_base);

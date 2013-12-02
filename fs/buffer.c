@@ -139,7 +139,7 @@ static inline void remove_from_queues(struct buffer_head * bh)
 		hash(bh->b_dev,bh->b_blocknr) = bh->b_next;
 /* remove from free list */
 	if (!(bh->b_prev_free) || !(bh->b_next_free))
-		panic("Free block list corrupted");
+		panic("remove_from_queues: Free block list corrupted");
 	bh->b_prev_free->b_next_free = bh->b_next_free;
 	bh->b_next_free->b_prev_free = bh->b_prev_free;
 	if (free_list == bh)
@@ -256,7 +256,7 @@ void brelse(struct buffer_head * buf)
 		return;
 	wait_on_buffer(buf);
 	if (!(buf->b_count--))
-		panic("Trying to free free buffer");
+		panic("brelse: Trying to free free buffer");
 	wake_up(&buffer_wait);
 }
 

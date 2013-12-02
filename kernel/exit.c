@@ -29,7 +29,7 @@ void release(struct task_struct * p)
 			schedule();
 			return;
 		}
-	panic("trying to release non-existent task");
+	panic("release: trying to release non-existent task");
 }
 
 static inline int send_sig(long sig,struct task_struct * p,int priv)
