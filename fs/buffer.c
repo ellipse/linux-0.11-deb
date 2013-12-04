@@ -281,9 +281,13 @@ struct buffer_head * bread(int dev,int block)
 }
 
 #define COPYBLK(from,to) \
-__asm__("cld\n\t" \
+__asm__("pushl %%esi\n\t"\
+	"pushl %%edi\n\t"\
+	"cld\n\t" \
 	"rep\n\t" \
 	"movsl\n\t" \
+	"popl %%edi\n\t"\
+	"popl %%esi"\
 	::"c" (BLOCK_SIZE/4),"S" (from),"D" (to))
 
 /*

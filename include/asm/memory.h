@@ -7,7 +7,11 @@
  */
 #define memcpy(dest,src,n) ({ \
 void * _res = dest; \
-__asm__ ("cld;rep;movsb" \
+__asm__ ("pushl %%edi\n\t"\
+         "pushl %%esi\n\t"\
+         "cld;rep;movsb\n\t"\
+         "popl %%esi\n\t"\
+         "popl %%edi"\
          ::"D" ((long)(_res)),"S" ((long)(src)),"c" ((long) (n)));\
 _res; \
 })

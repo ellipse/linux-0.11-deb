@@ -196,7 +196,7 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/fs/bitmap.c linux-0.11-deb/fs/b
  void free_block(int dev, int block)
 diff -uNr '--exclude-from=diffignore' linux-0.11/fs/buffer.c linux-0.11-deb/fs/buffer.c
 --- linux-0.11/fs/buffer.c	2013-11-22 23:20:48.619288907 +0800
-+++ linux-0.11-deb/fs/buffer.c	2013-12-01 14:10:19.448606692 +0800
++++ linux-0.11-deb/fs/buffer.c	2013-12-03 17:48:59.548183990 +0800
 @@ -139,7 +139,7 @@
  		hash(bh->b_dev,bh->b_blocknr) = bh->b_next;
  /* remove from free list */
@@ -215,12 +215,20 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/fs/buffer.c linux-0.11-deb/fs/b
  	wake_up(&buffer_wait);
  }
  
-@@ -284,8 +284,7 @@
- __asm__("cld\n\t" \
+@@ -281,11 +281,14 @@
+ }
+ 
+ #define COPYBLK(from,to) \
+-__asm__("cld\n\t" \
++__asm__("pushl %%esi\n\t"\
++	"pushl %%edi\n\t"\
++	"cld\n\t" \
  	"rep\n\t" \
  	"movsl\n\t" \
 -	::"c" (BLOCK_SIZE/4),"S" (from),"D" (to) \
 -	:"cx","di","si")
++	"popl %%edi\n\t"\
++	"popl %%esi"\
 +	::"c" (BLOCK_SIZE/4),"S" (from),"D" (to))
  
  /*
@@ -264,8 +272,8 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/fs/Makefile linux-0.11-deb/fs/M
  .c.s:
 diff -uNr '--exclude-from=diffignore' linux-0.11/fs/namei.c linux-0.11-deb/fs/namei.c
 --- linux-0.11/fs/namei.c	2013-11-22 23:20:48.619288907 +0800
-+++ linux-0.11-deb/fs/namei.c	2013-11-21 17:12:18.320908035 +0800
-@@ -62,7 +62,7 @@
++++ linux-0.11-deb/fs/namei.c	2013-12-02 17:10:11.765164124 +0800
+@@ -62,18 +62,21 @@
   */
  static int match(int len,const char * name,struct dir_entry * de)
  {
@@ -274,9 +282,17 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/fs/namei.c linux-0.11-deb/fs/na
  
  	if (!de || !de->inode || len > NAME_LEN)
  		return 0;
-@@ -72,8 +72,7 @@
+ 	if (len < NAME_LEN && de->name[len])
+ 		return 0;
+-	__asm__("cld\n\t"
++	__asm__("pushl %%esi\n\t"
++		"pushl %%edi\n\t"
++		"cld\n\t"
  		"fs ; repe ; cmpsb\n\t"
- 		"setz %%al"
+-		"setz %%al"
++		"setz %%al\n\t"
++		"popl %%edi\n\t"
++		"popl %%esi"
  		:"=a" (same)
 -		:"0" (0),"S" ((long) name),"D" ((long) de->name),"c" (len)
 -		:"cx","di","si");
@@ -298,20 +314,33 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/fs/super.c linux-0.11-deb/fs/su
  
 diff -uNr '--exclude-from=diffignore' linux-0.11/include/asm/memory.h linux-0.11-deb/include/asm/memory.h
 --- linux-0.11/include/asm/memory.h	2013-11-22 23:20:48.623288899 +0800
-+++ linux-0.11-deb/include/asm/memory.h	2013-11-21 17:28:58.632813919 +0800
-@@ -8,7 +8,6 @@
++++ linux-0.11-deb/include/asm/memory.h	2013-12-03 17:54:36.511608009 +0800
+@@ -7,8 +7,11 @@
+  */
  #define memcpy(dest,src,n) ({ \
  void * _res = dest; \
- __asm__ ("cld;rep;movsb" \
+-__asm__ ("cld;rep;movsb" \
 -	::"D" ((long)(_res)),"S" ((long)(src)),"c" ((long) (n)) \
 -	:"di","si","cx"); \
++__asm__ ("pushl %%edi\n\t"\
++         "pushl %%esi\n\t"\
++         "cld;rep;movsb\n\t"\
++         "popl %%esi\n\t"\
++         "popl %%edi"\
 +         ::"D" ((long)(_res)),"S" ((long)(src)),"c" ((long) (n)));\
  _res; \
  })
 diff -uNr '--exclude-from=diffignore' linux-0.11/include/asm/segment.h linux-0.11-deb/include/asm/segment.h
 --- linux-0.11/include/asm/segment.h	2013-11-22 23:20:48.623288899 +0800
-+++ linux-0.11-deb/include/asm/segment.h	2013-11-21 16:35:01.633698824 +0800
-@@ -24,7 +24,7 @@
++++ linux-0.11-deb/include/asm/segment.h	2013-12-02 17:18:30.159873207 +0800
+@@ -18,13 +18,13 @@
+ {
+ 	unsigned long _v;
+ 
+-	__asm__ ("movl %%fs:%1,%0":"=r" (_v):"m" (*addr)); \
++	__asm__ ("movl %%fs:%1,%0":"=r" (_v):"m" (*addr));
+ 	return _v;
+ }
  
  extern inline void put_fs_byte(char val,char *addr)
  {
@@ -400,81 +429,183 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/include/linux/varfix.h linux-0.
 +#endif
 diff -uNr '--exclude-from=diffignore' linux-0.11/include/string.h linux-0.11-deb/include/string.h
 --- linux-0.11/include/string.h	2013-11-22 23:20:48.623288899 +0800
-+++ linux-0.11-deb/include/string.h	2013-11-27 15:11:41.147556962 +0800
-@@ -31,7 +31,7 @@
++++ linux-0.11-deb/include/string.h	2013-12-04 16:21:24.546151743 +0800
+@@ -26,18 +26,24 @@
+  
+ extern inline char * strcpy(char * dest,const char *src)
+ {
+-__asm__("cld\n"
++__asm__("pushl %%esi\n\t"
++        "pushl %%edi\n\t"
++        "cld\n"
+ 	"1:\tlodsb\n\t"
  	"stosb\n\t"
  	"testb %%al,%%al\n\t"
- 	"jne 1b"
+-	"jne 1b"
 -	::"S" (src),"D" (dest):"si","di","ax");
++	"jne 1b\n\t"
++        "popl %%edi\n\t"
++        "popl %%esi"
 +	::"S" (src),"D" (dest):"ax");
  return dest;
  }
  
-@@ -47,7 +47,7 @@
+ extern inline char * strncpy(char * dest,const char *src,int count)
+ {
+-__asm__("cld\n"
++__asm__("pushl %%esi\n\t"
++        "pushl %%edi\n\t"
++        "cld\n"
+ 	"1:\tdecl %2\n\t"
+ 	"js 2f\n\t"
+ 	"lodsb\n\t"
+@@ -46,28 +52,36 @@
+ 	"jne 1b\n\t"
  	"rep\n\t"
  	"stosb\n"
- 	"2:"
+-	"2:"
 -	::"S" (src),"D" (dest),"c" (count):"si","di","ax","cx");
++	"2:\n\t"
++        "popl %%edi\n\t"
++        "popl %%esi"
 +	::"S" (src),"D" (dest),"c" (count):"ax");
  return dest;
  }
  
-@@ -61,7 +61,7 @@
+ extern inline char * strcat(char * dest,const char * src)
+ {
+-__asm__("cld\n\t"
++__asm__("pushl %%esi\n\t"
++        "pushl %%edi\n\t"
++        "cld\n\t"
+ 	"repne\n\t"
+ 	"scasb\n\t"
+ 	"decl %1\n"
+ 	"1:\tlodsb\n\t"
  	"stosb\n\t"
  	"testb %%al,%%al\n\t"
- 	"jne 1b"
+-	"jne 1b"
 -	::"S" (src),"D" (dest),"a" (0),"c" (0xffffffff):"si","di","ax","cx");
++	"jne 1b\n\t"
++        "popl %%edi\n\t"
++        "popl %%esi"
 +	::"S" (src),"D" (dest),"a" (0),"c" (0xffffffff));
  return dest;
  }
  
-@@ -80,8 +80,7 @@
+ extern inline char * strncat(char * dest,const char * src,int count)
+ {
+-__asm__("cld\n\t"
++__asm__("pushl %%esi\n\t"
++        "pushl %%edi\n\t"
++        "cld\n\t"
+ 	"repne\n\t"
+ 	"scasb\n\t"
+ 	"decl %1\n\t"
+@@ -79,16 +93,19 @@
+ 	"testb %%al,%%al\n\t"
  	"jne 1b\n"
  	"2:\txorl %2,%2\n\t"
- 	"stosb"
+-	"stosb"
 -	::"S" (src),"D" (dest),"a" (0),"c" (0xffffffff),"g" (count)
 -	:"si","di","ax","cx");
++	"stosb\n\t"
++        "popl %%edi\n\t"
++        "popl %%esi"
 +	::"S" (src),"D" (dest),"a" (0),"c" (0xffffffff),"g" (count));
  return dest;
  }
  
-@@ -100,7 +99,7 @@
+ extern inline int strcmp(const char * cs,const char * ct)
+ {
+-register int __res __asm__("ax");
+-__asm__("cld\n"
++  register int __res __asm__("ax");
++__asm__("pushl %%esi\n\t"
++        "pushl %%edi\n\t"
++        "cld\n"
+ 	"1:\tlodsb\n\t"
+ 	"scasb\n\t"
+ 	"jne 2f\n\t"
+@@ -99,15 +116,19 @@
+ 	"2:\tmovl $1,%%eax\n\t"
  	"jl 3f\n\t"
  	"negl %%eax\n"
- 	"3:"
+-	"3:"
 -	:"=a" (__res):"D" (cs),"S" (ct):"si","di");
++	"3:\n\t"
++        "popl %%edi\n\t"
++        "popl %%esi"
 +	:"=a" (__res):"D" (cs),"S" (ct));
  return __res;
  }
  
-@@ -121,7 +120,7 @@
+ extern inline int strncmp(const char * cs,const char * ct,int count)
+ {
+ register int __res __asm__("ax");
+-__asm__("cld\n"
++__asm__("pushl %%esi\n\t"
++        "pushl %%edi\n\t"
++        "cld\n"
+ 	"1:\tdecl %3\n\t"
+ 	"js 2f\n\t"
+ 	"lodsb\n\t"
+@@ -120,15 +141,18 @@
+ 	"3:\tmovl $1,%%eax\n\t"
  	"jl 4f\n\t"
  	"negl %%eax\n"
- 	"4:"
+-	"4:"
 -	:"=a" (__res):"D" (cs),"S" (ct),"c" (count):"si","di","cx");
++	"4:\n\t"
++        "popl %%edi\n\t"
++        "popl %%esi"
 +	:"=a" (__res):"D" (cs),"S" (ct),"c" (count));
  return __res;
  }
  
-@@ -138,7 +137,7 @@
+ extern inline char * strchr(const char * s,char c)
+ {
+ register char * __res __asm__("ax");
+-__asm__("cld\n\t"
++__asm__("pushl %%esi\n\t"
++        "cld\n\t"
+ 	"movb %%al,%%ah\n"
+ 	"1:\tlodsb\n\t"
+ 	"cmpb %%ah,%%al\n\t"
+@@ -137,15 +161,17 @@
+ 	"jne 1b\n\t"
  	"movl $1,%1\n"
  	"2:\tmovl %1,%0\n\t"
- 	"decl %0"
+-	"decl %0"
 -	:"=a" (__res):"S" (s),"0" (c):"si");
++	"decl %0\n\t"
++        "popl %%esi"
 +	:"=a" (__res):"S" (s),"0" (c));
  return __res;
  }
  
-@@ -154,7 +153,7 @@
+ extern inline char * strrchr(const char * s,char c)
+ {
+ register char * __res __asm__("dx");
+-__asm__("cld\n\t"
++__asm__("pushl %%esi\n\t"
++        "cld\n\t"
+ 	"movb %%al,%%ah\n"
+ 	"1:\tlodsb\n\t"
+ 	"cmpb %%ah,%%al\n\t"
+@@ -153,8 +179,9 @@
+ 	"movl %%esi,%0\n\t"
  	"decl %0\n"
  	"2:\ttestb %%al,%%al\n\t"
- 	"jne 1b"
+-	"jne 1b"
 -	:"=d" (__res):"0" (0),"S" (s),"a" (c):"ax","si");
++	"jne 1b\n\t"
++        "popl %%esi"
 +	:"=d" (__res):"0" (0),"S" (s),"a" (c));
  return __res;
  }
  
-@@ -178,7 +177,7 @@
+@@ -178,7 +205,7 @@
  	"je 1b\n"
  	"2:\tdecl %0"
  	:"=S" (__res):"a" (0),"c" (0xffffffff),"0" (cs),"g" (ct)
@@ -483,7 +614,7 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/include/string.h linux-0.11-deb
  return __res-cs;
  }
  
-@@ -202,7 +201,7 @@
+@@ -202,7 +229,7 @@
  	"jne 1b\n"
  	"2:\tdecl %0"
  	:"=S" (__res):"a" (0),"c" (0xffffffff),"0" (cs),"g" (ct)
@@ -492,7 +623,7 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/include/string.h linux-0.11-deb
  return __res-cs;
  }
  
-@@ -229,7 +228,7 @@
+@@ -229,7 +256,7 @@
  	"2:\txorl %0,%0\n"
  	"3:"
  	:"=S" (__res):"a" (0),"c" (0xffffffff),"0" (cs),"g" (ct)
@@ -501,7 +632,7 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/include/string.h linux-0.11-deb
  return __res;
  }
  
-@@ -256,7 +255,7 @@
+@@ -256,19 +283,21 @@
  	"xorl %%eax,%%eax\n\t"
  	"2:"
  	:"=a" (__res):"0" (0),"c" (0xffffffff),"S" (cs),"g" (ct)
@@ -510,45 +641,85 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/include/string.h linux-0.11-deb
  return __res;
  }
  
-@@ -268,7 +267,7 @@
+ extern inline int strlen(const char * s)
+ {
+ register int __res __asm__("cx");
+-__asm__("cld\n\t"
++__asm__("pushl %%edi\n\t"
++        "cld\n\t"
+ 	"repne\n\t"
  	"scasb\n\t"
  	"notl %0\n\t"
- 	"decl %0"
+-	"decl %0"
 -	:"=c" (__res):"D" (s),"a" (0),"0" (0xffffffff):"di");
++	"decl %0\n\t"
++        "popl %%edi"
 +	:"=c" (__res):"D" (s),"a" (0),"0" (0xffffffff));
  return __res;
  }
  
-@@ -338,8 +337,7 @@
- __asm__("cld\n\t"
+@@ -335,35 +364,47 @@
+ 
+ extern inline void * memcpy(void * dest,const void * src, int n)
+ {
+-__asm__("cld\n\t"
++__asm__("pushl %%esi\n\t"
++        "pushl %%edi\n\t"
++        "cld\n\t"
  	"rep\n\t"
- 	"movsb"
+-	"movsb"
 -	::"c" (n),"S" (src),"D" (dest)
 -	:"cx","si","di");
++	"movsb\n\t"
++        "popl %%edi\n\t"
++        "popl %%esi"
 +	::"c" (n),"S" (src),"D" (dest));
  return dest;
  }
  
-@@ -349,14 +347,13 @@
- __asm__("cld\n\t"
+ extern inline void * memmove(void * dest,const void * src, int n)
+ {
+ if (dest<src)
+-__asm__("cld\n\t"
++__asm__("pushl %%esi\n\t"
++        "pushl %%edi\n\t"
++        "cld\n\t"
  	"rep\n\t"
- 	"movsb"
+-	"movsb"
 -	::"c" (n),"S" (src),"D" (dest)
 -	:"cx","si","di");
++	"movsb\n\t"
++        "popl %%edi\n\t"
++        "popl %%esi"
 +	::"c" (n),"S" (src),"D" (dest));
  else
- __asm__("std\n\t"
+-__asm__("std\n\t"
++__asm__("pushl %%esi\n\t"
++        "pushl %%edi\n\t"
++        "std\n\t"
  	"rep\n\t"
 -	"movsb"
 -	::"c" (n),"S" (src+n-1),"D" (dest+n-1)
 -	:"cx","si","di");
 +	"movsb\n\t"
-+        "cld"
++        "cld\n\t"
++        "popl %%edi\n\t"
++        "popl %%esi"
 +	::"c" (n),"S" (src+n-1),"D" (dest+n-1));
  return dest;
  }
  
-@@ -371,8 +368,7 @@
+ extern inline int memcmp(const void * cs,const void * ct,int count)
+ {
+ register int __res __asm__("ax");
+-__asm__("cld\n\t"
++__asm__("pushl %%esi\n\t"
++        "pushl %%edi\n\t"
++        "cld\n\t"
+ 	"repe\n\t"
+ 	"cmpsb\n\t"
+ 	"je 1f\n\t"
+@@ -371,8 +412,7 @@
  	"jl 1f\n\t"
  	"negl %%eax\n"
  	"1:"
@@ -558,7 +729,7 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/include/string.h linux-0.11-deb
  return __res;
  }
  
-@@ -387,8 +383,7 @@
+@@ -387,18 +427,18 @@
  	"je 1f\n\t"
  	"movl $1,%0\n"
  	"1:\tdecl %0"
@@ -568,12 +739,17 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/include/string.h linux-0.11-deb
  return __res;
  }
  
-@@ -397,8 +392,7 @@
- __asm__("cld\n\t"
+ extern inline void * memset(void * s,char c,int count)
+ {
+-__asm__("cld\n\t"
++__asm__("pushl %%edi\n\t"
++        "cld\n\t"
  	"rep\n\t"
- 	"stosb"
+-	"stosb"
 -	::"a" (c),"D" (s),"c" (count)
 -	:"cx","di");
++	"stosb\n\t"
++        "popl %%edi"
 +	::"a" (c),"D" (s),"c" (count));
  return s;
  }
@@ -784,34 +960,42 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/blk_drv/blk.h linux-0.11
  
 diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/blk_drv/floppy.c linux-0.11-deb/kernel/blk_drv/floppy.c
 --- linux-0.11/kernel/blk_drv/floppy.c	2013-11-22 23:20:48.627288897 +0800
-+++ linux-0.11-deb/kernel/blk_drv/floppy.c	2013-11-21 17:24:17.399832602 +0800
-@@ -154,8 +154,7 @@
++++ linux-0.11-deb/kernel/blk_drv/floppy.c	2013-12-03 17:58:55.591160724 +0800
+@@ -153,9 +153,12 @@
+ }
  
  #define copy_buffer(from,to) \
- __asm__("cld ; rep ; movsl" \
+-__asm__("cld ; rep ; movsl" \
 -	::"c" (BLOCK_SIZE/4),"S" ((long)(from)),"D" ((long)(to)) \
 -	:"cx","di","si")
++__asm__("pushl %%esi\n\t"\
++	"pushl %%edi\n\t"\
++	"cld ; rep ; movsl\n\t"\
++	"popl %%edi\n\t"\
++	"popl %%esi"\
 +	::"c" (BLOCK_SIZE/4),"S" ((long)(from)),"D" ((long)(to)))
  
  static void setup_DMA(void)
  {
 diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/blk_drv/hd.c linux-0.11-deb/kernel/blk_drv/hd.c
 --- linux-0.11/kernel/blk_drv/hd.c	2013-11-22 23:20:48.627288897 +0800
-+++ linux-0.11-deb/kernel/blk_drv/hd.c	2013-12-01 13:58:04.640603977 +0800
-@@ -59,10 +59,10 @@
++++ linux-0.11-deb/kernel/blk_drv/hd.c	2013-12-02 21:11:41.122418914 +0800
+@@ -59,10 +59,12 @@
  } hd[5*MAX_HD]={{0,0},};
  
  #define port_read(port,buf,nr) \
 -__asm__("cld;rep;insw"::"d" (port),"D" (buf),"c" (nr):"cx","di")
-+__asm__("cld;rep;insw"::"d" (port),"D" (buf),"c" (nr))
++__asm__("cld;rep;insw"\
++	::"d" (port),"D" (buf),"c" (nr))
  
  #define port_write(port,buf,nr) \
 -__asm__("cld;rep;outsw"::"d" (port),"S" (buf),"c" (nr):"cx","si")
-+__asm__("cld;rep;outsw"::"d" (port),"S" (buf),"c" (nr))
++__asm__("cld;rep;outsw"\
++	::"d" (port),"S" (buf),"c" (nr))
  
  extern void hd_interrupt(void);
  extern void rd_load(void);
-@@ -137,12 +137,12 @@
+@@ -137,12 +139,12 @@
  		if (!(bh = bread(0x300 + drive*5,0))) {
  			printk("Unable to read partition table of drive %d\n\r",
  				drive);
@@ -826,7 +1010,7 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/blk_drv/hd.c linux-0.11-
  		}
  		p = 0x1BE + (void *)bh->b_data;
  		for (i=1;i<5;i++,p++) {
-@@ -184,9 +184,9 @@
+@@ -184,9 +186,9 @@
  	register int port asm("dx");
  
  	if (drive>1 || head>15)
@@ -838,7 +1022,7 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/blk_drv/hd.c linux-0.11-
  	do_hd = intr_addr;
  	outb_p(hd_info[drive].ctl,HD_CMD);
  	port=HD_DATA;
-@@ -337,7 +337,7 @@
+@@ -337,7 +339,7 @@
  	} else if (CURRENT->cmd == READ) {
  		hd_out(dev,nsect,sec,head,cyl,WIN_READ,&read_intr);
  	} else
@@ -896,15 +1080,24 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/blk_drv/ramdisk.c linux-
  }
 diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/chr_drv/console.c linux-0.11-deb/kernel/chr_drv/console.c
 --- linux-0.11/kernel/chr_drv/console.c	2013-11-22 23:20:48.627288897 +0800
-+++ linux-0.11-deb/kernel/chr_drv/console.c	2013-11-27 15:02:55.565321661 +0800
-@@ -116,14 +116,14 @@
- 				__asm__("cld\n\t"
++++ linux-0.11-deb/kernel/chr_drv/console.c	2013-12-04 16:05:39.624250511 +0800
+@@ -113,57 +113,73 @@
+ 			pos += video_size_row;
+ 			scr_end += video_size_row;
+ 			if (scr_end > video_mem_end) {
+-				__asm__("cld\n\t"
++				__asm__("pushl %%esi\n\t"
++					"pushl %%edi\n\t"
++					"cld\n\t"
  					"rep\n\t"
  					"movsl\n\t"
 -					"movl _video_num_columns,%1\n\t"
 +					"movl video_num_columns,%1\n\t"
  					"rep\n\t"
- 					"stosw"
+-					"stosw"
++					"stosw\n\t"
++					"popl %%edi\n\t"
++					"popl %%esi"
  					::"a" (video_erase_char),
  					"c" ((video_num_lines-1)*video_num_columns>>1),
  					"D" (video_mem_start),
@@ -915,8 +1108,16 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/chr_drv/console.c linux-
  				scr_end -= origin-video_mem_start;
  				pos -= origin-video_mem_start;
  				origin = video_mem_start;
-@@ -133,22 +133,22 @@
- 					"stosw"
+ 			} else {
+-				__asm__("cld\n\t"
++				__asm__("pushl %%esi\n\t"
++					"pushl %%edi\n\t"
++					"cld\n\t"
+ 					"rep\n\t"
+-					"stosw"
++					"stosw\n\t"
++					"popl %%edi\n\t"
++					"popl %%esi"
  					::"a" (video_erase_char),
  					"c" (video_num_columns),
 -					"D" (scr_end-video_size_row)
@@ -926,13 +1127,19 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/chr_drv/console.c linux-
  			}
  			set_origin();
  		} else {
- 			__asm__("cld\n\t"
+-			__asm__("cld\n\t"
++			__asm__("pushl %%esi\n\t"
++				"pushl %%edi\n\t"
++				"cld\n\t"
  				"rep\n\t"
  				"movsl\n\t"
 -				"movl _video_num_columns,%%ecx\n\t"
 +				"movl video_num_columns,%%ecx\n\t"
  				"rep\n\t"
- 				"stosw"
+-				"stosw"
++				"stosw\n\t"
++				"popl %%edi\n\t"
++				"popl %%esi"
  				::"a" (video_erase_char),
  				"c" ((bottom-top-1)*video_num_columns>>1),
  				"D" (origin+video_size_row*top),
@@ -943,14 +1150,20 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/chr_drv/console.c linux-
  		}
  	}
  	else		/* Not EGA/VGA */
-@@ -156,14 +156,14 @@
- 		__asm__("cld\n\t"
+ 	{
+-		__asm__("cld\n\t"
++		__asm__("pushl %%esi\n\t"
++			"pushl %%edi\n\t"
++			"cld\n\t"
  			"rep\n\t"
  			"movsl\n\t"
 -			"movl _video_num_columns,%%ecx\n\t"
 +			"movl video_num_columns,%%ecx\n\t"
  			"rep\n\t"
- 			"stosw"
+-			"stosw"
++			"stosw\n\t"
++			"popl %%edi\n\t"
++			"popl %%esi"
  			::"a" (video_erase_char),
  			"c" ((bottom-top-1)*video_num_columns>>1),
  			"D" (origin+video_size_row*top),
@@ -961,7 +1174,14 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/chr_drv/console.c linux-
  	}
  }
  
-@@ -175,14 +175,15 @@
+@@ -171,33 +187,43 @@
+ {
+ 	if (video_type == VIDEO_TYPE_EGAC || video_type == VIDEO_TYPE_EGAM)
+ 	{
+-		__asm__("std\n\t"
++		__asm__("pushl %%esi\n\t"
++			"pushl %%edi\n\t"
++			"std\n\t"
  			"rep\n\t"
  			"movsl\n\t"
  			"addl $2,%%edi\n\t"	/* %edi has been decremented by 4 */
@@ -970,7 +1190,9 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/chr_drv/console.c linux-
  			"rep\n\t"
 -			"stosw"
 +			"stosw\n\t"
-+			"cld"
++			"cld\n\t"
++			"popl %%edi\n\t"
++			"popl %%esi"
  			::"a" (video_erase_char),
  			"c" ((bottom-top-1)*video_num_columns>>1),
  			"D" (origin+video_size_row*bottom-4),
@@ -981,7 +1203,10 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/chr_drv/console.c linux-
  	}
  	else		/* Not EGA/VGA */
  	{
-@@ -190,14 +191,15 @@
+-		__asm__("std\n\t"
++		__asm__("pushl %%esi\n\t"
++			"pushl %%edi\n\t"
++			"std\n\t"
  			"rep\n\t"
  			"movsl\n\t"
  			"addl $2,%%edi\n\t"	/* %edi has been decremented by 4 */
@@ -990,7 +1215,9 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/chr_drv/console.c linux-
  			"rep\n\t"
 -			"stosw"
 +			"stosw\n\t"
-+			"cld"
++			"cld\n\t"
++			"popl %%edi\n\t"
++			"popl %%esi"
  			::"a" (video_erase_char),
  			"c" ((bottom-top-1)*video_num_columns>>1),
  			"D" (origin+video_size_row*bottom-4),
@@ -1001,9 +1228,16 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/chr_drv/console.c linux-
  	}
  }
  
-@@ -261,8 +263,8 @@
+@@ -257,12 +283,14 @@
+ 		default:
+ 			return;
+ 	}
+-	__asm__("cld\n\t"
++	__asm__("pushl %%edi\n\t"
++		"cld\n\t"
  		"rep\n\t"
  		"stosw\n\t"
++		"popl %%edi"
  		::"c" (count),
 -		"D" (start),"a" (video_erase_char)
 -		:"cx","di");
@@ -1012,9 +1246,16 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/chr_drv/console.c linux-
  }
  
  static void csi_K(int par)
-@@ -292,8 +294,8 @@
+@@ -288,12 +316,14 @@
+ 		default:
+ 			return;
+ 	}
+-	__asm__("cld\n\t"
++	__asm__("pushl %%edi\n\t"
++		"cld\n\t"
  		"rep\n\t"
  		"stosw\n\t"
++		"popl %%edi"
  		::"c" (count),
 -		"D" (start),"a" (video_erase_char)
 -		:"cx","di");
@@ -1023,7 +1264,7 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/kernel/chr_drv/console.c linux-
  }
  
  void csi_m(void)
-@@ -458,10 +460,10 @@
+@@ -458,10 +488,10 @@
  						pos -= video_size_row;
  						lf();
  					}
@@ -1740,32 +1981,42 @@ diff -uNr '--exclude-from=diffignore' linux-0.11/mm/Makefile linux-0.11-deb/mm/M
  .c.o:
 diff -uNr '--exclude-from=diffignore' linux-0.11/mm/memory.c linux-0.11-deb/mm/memory.c
 --- linux-0.11/mm/memory.c	2013-11-22 23:20:48.631288901 +0800
-+++ linux-0.11-deb/mm/memory.c	2013-11-29 20:17:04.525374345 +0800
-@@ -52,7 +52,7 @@
++++ linux-0.11-deb/mm/memory.c	2013-12-03 17:59:10.283135236 +0800
+@@ -52,7 +52,12 @@
  static long HIGH_MEMORY = 0;
  
  #define copy_page(from,to) \
 -__asm__("cld ; rep ; movsl"::"S" (from),"D" (to),"c" (1024):"cx","di","si")
-+__asm__("cld ; rep ; movsl"::"S" (from),"D" (to),"c" (1024))
++__asm__("pushl %%edi\n\t"\
++	"pushl %%esi\n\t"\
++	"cld ; rep ; movsl\n\t"\
++	"popl %%esi\n\t"\
++	"popl %%edi"\
++	::"S" (from),"D" (to),"c" (1024))
  
  static unsigned char mem_map [ PAGING_PAGES ] = {0,};
  
-@@ -62,7 +62,7 @@
+@@ -62,9 +67,10 @@
   */
  unsigned long get_free_page(void)
  {
 -register unsigned long __res asm("ax");
 +register unsigned long __res;
  
- __asm__("std ; repne ; scasb\n\t"
+-__asm__("std ; repne ; scasb\n\t"
++__asm__("pushl %%edi\n\t"
++	"std ; repne ; scasb\n\t"
  	"jne 1f\n\t"
-@@ -74,11 +74,12 @@
+ 	"movb $1,1(%%edi)\n\t"
+ 	"sall $12,%%ecx\n\t"
+@@ -74,11 +80,13 @@
  	"leal 4092(%%edx),%%edi\n\t"
  	"rep ; stosl\n\t"
  	"movl %%edx,%%eax\n"
 -	"1:"
 +	"1:\n\t"
-+	"cld"
++	"cld\n\t"
++	"popl %%edi"
  	:"=a" (__res)
  	:"0" (0),"i" (LOW_MEM),"c" (PAGING_PAGES),
  	"D" (mem_map+PAGING_PAGES-1)

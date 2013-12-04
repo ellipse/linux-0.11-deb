@@ -52,7 +52,12 @@ current->start_code + current->end_code)
 static long HIGH_MEMORY = 0;
 
 #define copy_page(from,to) \
-__asm__("cld ; rep ; movsl"::"S" (from),"D" (to),"c" (1024))
+__asm__("pushl %%edi\n\t"\
+	"pushl %%esi\n\t"\
+	"cld ; rep ; movsl\n\t"\
+	"popl %%esi\n\t"\
+	"popl %%edi"\
+	::"S" (from),"D" (to),"c" (1024))
 
 static unsigned char mem_map [ PAGING_PAGES ] = {0,};
 
@@ -64,7 +69,8 @@ unsigned long get_free_page(void)
 {
 register unsigned long __res;
 
-__asm__("std ; repne ; scasb\n\t"
+__asm__("pushl %%edi\n\t"
+	"std ; repne ; scasb\n\t"
 	"jne 1f\n\t"
 	"movb $1,1(%%edi)\n\t"
 	"sall $12,%%ecx\n\t"
@@ -75,7 +81,8 @@ __asm__("std ; repne ; scasb\n\t"
 	"rep ; stosl\n\t"
 	"movl %%edx,%%eax\n"
 	"1:\n\t"
-	"cld"
+	"cld\n\t"
+	"popl %%edi"
 	:"=a" (__res)
 	:"0" (0),"i" (LOW_MEM),"c" (PAGING_PAGES),
 	"D" (mem_map+PAGING_PAGES-1)
