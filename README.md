@@ -22,7 +22,7 @@ $ patch -p1 < ../linux-0.11-deb64.patch
 
 1. The root device is "FLOPPY". You can change it in `./Makefile` by modifying the `ROOT_DEV`.
 2. You can use `make disk` to create a 1.44MB bootable image for bochs.
-3. The `bochsrc.bxrc` is the config file for bochs to run this kernel. The images of root device and hard disk are provides [here][3].
+3. The `bochsrc.bxrc` is the config file for bochs to run this kernel. The images of root device and hard disk are provided [here][3].
 
 [1]: http://bochs.sourceforge.net
 [2]: http://www.oldlinux.org/Linux.old/Linux-0.11/sources/system/
